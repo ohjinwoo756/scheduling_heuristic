@@ -2,16 +2,14 @@ from application import Application
 
 class PEFT():
 
-    def __init__(self, network, profile):
+    def __init__(self, networks, profiles):
+        # Generate 'Application' object
         self.target_apps = []
-        for idx in range(0, len(network)): # iterates as the total number of networks
-            self.target_apps.append(Application(network[idx], profile[idx]))
+        for idx in range(0, len(networks)):
+            self.target_apps.append(Application(networks[idx], profiles[idx]))
 
         # Construct OCT (Optimal Cost Table)
         self.construct_OCT()
-
-    def transform_to_tasks(self, network, profile):
-        pass
 
     def construct_OCT(self):
         pass

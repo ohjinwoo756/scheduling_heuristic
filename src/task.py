@@ -1,14 +1,13 @@
 
 class Task():
 
-    def __init__(self):
-        self.name = None
-        self.type = None
-        self.parent = []
-        self.child = []
+    def __init__(self, index, net_l):
+        self.index = index
+        self.name = str(net_l.name)
+        self.type = str(net_l.type)
+        self.cpu = None
+        self.gpu = None
+        self.npu = None
+        self.parents = []
+        self.childs = []
 
-    def set_name(self, layer_name):
-        self.name = layer_name
-
-    def set_type(self, layer_type):
-        self.type = layer_type
