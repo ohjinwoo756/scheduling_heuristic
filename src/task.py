@@ -5,9 +5,11 @@ class Task():
         self.index = index
         self.name = str(net_l.name)
         self.type = str(net_l.type)
-        self.cpu = None
-        self.gpu = None
-        self.npu = None
         self.parents = []
         self.childs = []
+
+    def set_processor_profile(self, prof_l):
+        self.cpu = prof_l.cpu
+        self.gpu = prof_l.gpu
+        self.npu = prof_l.npu
 

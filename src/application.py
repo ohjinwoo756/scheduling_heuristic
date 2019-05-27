@@ -29,10 +29,8 @@ class Application():
             self.name2task_dict[self.tasks[index].name] = self.tasks[index] # register to dictionary
 
         # 2. From profile input
-        for index, prof_l in enumerate(self.profile_list):
-            self.tasks[index].cpu = prof_l.cpu
-            self.tasks[index].gpu = prof_l.gpu
-            self.tasks[index].npu = prof_l.npu
+        for prof_l in self.profile_list:
+            self.tasks[index].set_processor_profile(prof_l)
 
     def apply_precedences(self):
         for l_idx, net_l in enumerate(self.layer_list):
@@ -43,13 +41,15 @@ class Application():
                 self.tasks[l_idx].parents.append(parent_obj) # add parent info
                 parent_obj.childs.append(self.tasks[l_idx]) # add chind info
 
-        # debug
-        # for l_idx, net_l in enumerate(self.layer_list):
-        #     for idx in range(0, len(net_l.top)):
-        #         p1 = self.tasks[l_idx].childs[idx]
-        #         p2 = self.tasks[p1.index]
-        #         print "Child matched? ", p1 == p2
-        #     for idx in range(0, len(net_l.bottom)):
-        #         t1 = self.tasks[l_idx].parents[idx]
-        #         t2 = self.tasks[t1.index]
-        #         print "Parent matched? ", t1 == t2
+        # check precedences
+        for l_idx, net_l in enumerate(self.layer_list):
+            for idx in range(0, len(self.tasks[l_idx].childs)):
+                p1 = self.tasks[l_idx].childs[idx]
+                p2 = self.tasks[p1.index]
+                if p1 != p2 :
+                    print "unmatched childs"
+            for idx in range(0, len(net_l.bottom)):
+                t1 = self.tasks[l_idx].parents[idx]
+                t2 = self.tasks[t1.index]
+                if t1 != t2 :
+                    print "unmatched parents"
