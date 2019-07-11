@@ -1,0 +1,388 @@
+layer {
+  name: "front"
+  type: "Input"
+  top: "front"
+  input_param {
+    shape {
+      dim: 1
+      dim: 3
+      dim: 224
+      dim: 224
+    }
+  }
+}
+layer {
+  name: "c1"
+  type: "Convolution"
+  bottom: "front"
+  top: "c1"
+  convolution_param {
+    num_output: 64
+    kernel_size: 3
+    stride: 2
+  }
+}
+layer {
+  name: "p1"
+  type: "Pooling"
+  bottom: "c1"
+  top: "p1"
+  pooling_param {
+    pool: MAX
+    kernel_size: 3
+    stride: 2
+  }
+}
+layer {
+  name: "c2"
+  type: "Convolution"
+  bottom: "p1"
+  top: "c2"
+  convolution_param {
+    num_output: 16
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c3"
+  type: "Convolution"
+  bottom: "c2"
+  top: "c3"
+  convolution_param {
+    num_output: 64
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c4"
+  type: "Convolution"
+  bottom: "c2"
+  top: "c4"
+  convolution_param {
+    num_output: 64
+    pad: 1
+    kernel_size: 3
+  }
+}
+layer {
+  name: "r1"
+  type: "Concat"
+  bottom: "c3"
+  bottom: "c4"
+  top: "r1"
+}
+layer {
+  name: "c5"
+  type: "Convolution"
+  bottom: "r1"
+  top: "c5"
+  convolution_param {
+    num_output: 16
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c6"
+  type: "Convolution"
+  bottom: "c5"
+  top: "c6"
+  convolution_param {
+    num_output: 64
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c7"
+  type: "Convolution"
+  bottom: "c5"
+  top: "c7"
+  convolution_param {
+    num_output: 64
+    pad: 1
+    kernel_size: 3
+  }
+}
+layer {
+  name: "r2"
+  type: "Concat"
+  bottom: "c6"
+  bottom: "c7"
+  top: "r2"
+}
+layer {
+  name: "p2"
+  type: "Pooling"
+  bottom: "r2"
+  top: "p2"
+  pooling_param {
+    pool: MAX
+    kernel_size: 3
+    stride: 2
+  }
+}
+layer {
+  name: "c8"
+  type: "Convolution"
+  bottom: "p2"
+  top: "c8"
+  convolution_param {
+    num_output: 32
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c9"
+  type: "Convolution"
+  bottom: "c8"
+  top: "c9"
+  convolution_param {
+    num_output: 128
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c10"
+  type: "Convolution"
+  bottom: "c8"
+  top: "c10"
+  convolution_param {
+    num_output: 128
+    pad: 1
+    kernel_size: 3
+  }
+}
+layer {
+  name: "r3"
+  type: "Concat"
+  bottom: "c9"
+  bottom: "c10"
+  top: "r3"
+}
+layer {
+  name: "c11"
+  type: "Convolution"
+  bottom: "r3"
+  top: "c11"
+  convolution_param {
+    num_output: 32
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c12"
+  type: "Convolution"
+  bottom: "c11"
+  top: "c12"
+  convolution_param {
+    num_output: 128
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c13"
+  type: "Convolution"
+  bottom: "c11"
+  top: "c13"
+  convolution_param {
+    num_output: 128
+    pad: 1
+    kernel_size: 3
+  }
+}
+layer {
+  name: "r4"
+  type: "Concat"
+  bottom: "c12"
+  bottom: "c13"
+  top: "r4"
+}
+layer {
+  name: "p3"
+  type: "Pooling"
+  bottom: "r4"
+  top: "p3"
+  pooling_param {
+    pool: MAX
+    kernel_size: 3
+    stride: 2
+  }
+}
+layer {
+  name: "c14"
+  type: "Convolution"
+  bottom: "p3"
+  top: "c14"
+  convolution_param {
+    num_output: 48
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c15"
+  type: "Convolution"
+  bottom: "c14"
+  top: "c15"
+  convolution_param {
+    num_output: 192
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c16"
+  type: "Convolution"
+  bottom: "c14"
+  top: "c16"
+  convolution_param {
+    num_output: 192
+    pad: 1
+    kernel_size: 3
+  }
+}
+layer {
+  name: "r5"
+  type: "Concat"
+  bottom: "c15"
+  bottom: "c16"
+  top: "r5"
+}
+layer {
+  name: "c17"
+  type: "Convolution"
+  bottom: "r5"
+  top: "c17"
+  convolution_param {
+    num_output: 48
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c18"
+  type: "Convolution"
+  bottom: "c17"
+  top: "c18"
+  convolution_param {
+    num_output: 192
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c19"
+  type: "Convolution"
+  bottom: "c17"
+  top: "c19"
+  convolution_param {
+    num_output: 192
+    pad: 1
+    kernel_size: 3
+  }
+}
+layer {
+  name: "r6"
+  type: "Concat"
+  bottom: "c18"
+  bottom: "c19"
+  top: "r6"
+}
+layer {
+  name: "c20"
+  type: "Convolution"
+  bottom: "r6"
+  top: "c20"
+  convolution_param {
+    num_output: 64
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c21"
+  type: "Convolution"
+  bottom: "c20"
+  top: "c21"
+  convolution_param {
+    num_output: 256
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c22"
+  type: "Convolution"
+  bottom: "c20"
+  top: "c22"
+  convolution_param {
+    num_output: 256
+    pad: 1
+    kernel_size: 3
+  }
+}
+layer {
+  name: "r7"
+  type: "Concat"
+  bottom: "c21"
+  bottom: "c22"
+  top: "r7"
+}
+layer {
+  name: "c23"
+  type: "Convolution"
+  bottom: "r7"
+  top: "c23"
+  convolution_param {
+    num_output: 64
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c24"
+  type: "Convolution"
+  bottom: "c23"
+  top: "c24"
+  convolution_param {
+    num_output: 256
+    kernel_size: 1
+  }
+}
+layer {
+  name: "c25"
+  type: "Convolution"
+  bottom: "c23"
+  top: "c25"
+  convolution_param {
+    num_output: 256
+    pad: 1
+    kernel_size: 3
+  }
+}
+layer {
+  name: "r8"
+  type: "Concat"
+  bottom: "c24"
+  bottom: "c25"
+  top: "r8"
+}
+layer {
+  name: "c26"
+  type: "Convolution"
+  bottom: "r8"
+  top: "c26"
+  convolution_param {
+    num_output: 1000
+    kernel_size: 1
+  }
+}
+layer {
+  name: "p4"
+  type: "Pooling"
+  bottom: "c26"
+  top: "p4"
+  pooling_param {
+    pool: AVE
+    kernel_size: 13
+    stride: 13
+  }
+}
+layer {
+  name: "back"
+  type: "Softmax"
+  bottom: "p4"
+  top: "back"
+}

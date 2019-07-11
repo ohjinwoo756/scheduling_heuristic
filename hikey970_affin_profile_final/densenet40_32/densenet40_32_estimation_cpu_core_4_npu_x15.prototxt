@@ -1,0 +1,322 @@
+layer {
+  name: "front"
+  time_unit: "usec"
+  cpu: 3153.5
+  gpu: 999999.0
+  npu: 999999.0
+}
+layer {
+  name: "c1"
+  time_unit: "usec"
+  cpu: 14091.0
+  gpu: 4479.0
+  npu: 499.086669922
+}
+layer {
+  name: "p1"
+  time_unit: "usec"
+  cpu: 765.0
+  gpu: 293.0
+  npu: 29.1800003052
+}
+layer {
+  name: "c2"
+  time_unit: "usec"
+  cpu: 3364.69995117
+  gpu: 1497.0
+  npu: 179.113327026
+}
+layer {
+  name: "c3"
+  time_unit: "usec"
+  cpu: 5895.29980469
+  gpu: 2345.0
+  npu: 242.020004272
+}
+layer {
+  name: "c4"
+  time_unit: "usec"
+  cpu: 4448.0
+  gpu: 1710.0
+  npu: 203.753326416
+}
+layer {
+  name: "c5"
+  time_unit: "usec"
+  cpu: 6677.29980469
+  gpu: 2125.0
+  npu: 240.0
+}
+layer {
+  name: "c6"
+  time_unit: "usec"
+  cpu: 6321.0
+  gpu: 1856.0
+  npu: 245.64666748
+}
+layer {
+  name: "c7"
+  time_unit: "usec"
+  cpu: 6923.70019531
+  gpu: 2026.0
+  npu: 240.953338623
+}
+layer {
+  name: "c8"
+  time_unit: "usec"
+  cpu: 7586.0
+  gpu: 1995.0
+  npu: 274.886657715
+}
+layer {
+  name: "c9"
+  time_unit: "usec"
+  cpu: 7119.70019531
+  gpu: 1927.0
+  npu: 242.580001831
+}
+layer {
+  name: "c10"
+  time_unit: "usec"
+  cpu: 8437.70019531
+  gpu: 2160.0
+  npu: 303.046661377
+}
+layer {
+  name: "p2"
+  time_unit: "usec"
+  cpu: 454.299987793
+  gpu: 95.0
+  npu: 16.7999992371
+}
+layer {
+  name: "c11"
+  time_unit: "usec"
+  cpu: 1520.0
+  gpu: 669.0
+  npu: 77.0866699219
+}
+layer {
+  name: "c12"
+  time_unit: "usec"
+  cpu: 2551.0
+  gpu: 849.0
+  npu: 170.913330078
+}
+layer {
+  name: "c13"
+  time_unit: "usec"
+  cpu: 1790.30004883
+  gpu: 769.0
+  npu: 86.5133361816
+}
+layer {
+  name: "c14"
+  time_unit: "usec"
+  cpu: 2523.0
+  gpu: 839.0
+  npu: 171.600006104
+}
+layer {
+  name: "c15"
+  time_unit: "usec"
+  cpu: 2020.69995117
+  gpu: 913.0
+  npu: 93.9333343506
+}
+layer {
+  name: "c16"
+  time_unit: "usec"
+  cpu: 2509.30004883
+  gpu: 855.0
+  npu: 170.466659546
+}
+layer {
+  name: "c17"
+  time_unit: "usec"
+  cpu: 2241.69995117
+  gpu: 882.0
+  npu: 100.466667175
+}
+layer {
+  name: "c18"
+  time_unit: "usec"
+  cpu: 2486.30004883
+  gpu: 841.0
+  npu: 170.153335571
+}
+layer {
+  name: "c19"
+  time_unit: "usec"
+  cpu: 2541.0
+  gpu: 1070.0
+  npu: 109.333335876
+}
+layer {
+  name: "c20"
+  time_unit: "usec"
+  cpu: 2476.69995117
+  gpu: 859.0
+  npu: 170.913330078
+}
+layer {
+  name: "c21"
+  time_unit: "usec"
+  cpu: 2723.69995117
+  gpu: 1170.0
+  npu: 115.800003052
+}
+layer {
+  name: "c22"
+  time_unit: "usec"
+  cpu: 2453.0
+  gpu: 875.0
+  npu: 174.419998169
+}
+layer {
+  name: "c23"
+  time_unit: "usec"
+  cpu: 2921.69995117
+  gpu: 1213.0
+  npu: 124.64666748
+}
+layer {
+  name: "c24"
+  time_unit: "usec"
+  cpu: 2433.0
+  gpu: 871.0
+  npu: 174.333328247
+}
+layer {
+  name: "c25"
+  time_unit: "usec"
+  cpu: 3058.69995117
+  gpu: 1306.0
+  npu: 132.113327026
+}
+layer {
+  name: "c26"
+  time_unit: "usec"
+  cpu: 2403.69995117
+  gpu: 881.0
+  npu: 172.933334351
+}
+layer {
+  name: "c27"
+  time_unit: "usec"
+  cpu: 5385.70019531
+  gpu: 2067.0
+  npu: 220.0
+}
+layer {
+  name: "p3"
+  time_unit: "usec"
+  cpu: 275.700012207
+  gpu: 58.0
+  npu: 12.4200000763
+}
+layer {
+  name: "c28"
+  time_unit: "usec"
+  cpu: 645.299987793
+  gpu: 636.0
+  npu: 35.8666648865
+}
+layer {
+  name: "c29"
+  time_unit: "usec"
+  cpu: 685.0
+  gpu: 655.0
+  npu: 36.9799995422
+}
+layer {
+  name: "c30"
+  time_unit: "usec"
+  cpu: 688.299987793
+  gpu: 671.0
+  npu: 38.313331604
+}
+layer {
+  name: "c31"
+  time_unit: "usec"
+  cpu: 602.0
+  gpu: 635.0
+  npu: 37.2000007629
+}
+layer {
+  name: "c32"
+  time_unit: "usec"
+  cpu: 732.700012207
+  gpu: 706.0
+  npu: 40.6466674805
+}
+layer {
+  name: "c33"
+  time_unit: "usec"
+  cpu: 618.299987793
+  gpu: 657.0
+  npu: 37.2000007629
+}
+layer {
+  name: "c34"
+  time_unit: "usec"
+  cpu: 769.0
+  gpu: 739.0
+  npu: 42.7799987793
+}
+layer {
+  name: "c35"
+  time_unit: "usec"
+  cpu: 615.700012207
+  gpu: 652.0
+  npu: 37.1133346558
+}
+layer {
+  name: "c36"
+  time_unit: "usec"
+  cpu: 822.0
+  gpu: 768.0
+  npu: 45.5133323669
+}
+layer {
+  name: "c37"
+  time_unit: "usec"
+  cpu: 620.700012207
+  gpu: 679.0
+  npu: 36.8199996948
+}
+layer {
+  name: "c38"
+  time_unit: "usec"
+  cpu: 870.0
+  gpu: 802.0
+  npu: 48.3333320618
+}
+layer {
+  name: "c39"
+  time_unit: "usec"
+  cpu: 624.700012207
+  gpu: 677.0
+  npu: 36.9333343506
+}
+layer {
+  name: "c40"
+  time_unit: "usec"
+  cpu: 4736.29980469
+  gpu: 2367.0
+  npu: 259.153320312
+}
+layer {
+  name: "p4"
+  time_unit: "usec"
+  cpu: 1134.30004883
+  gpu: 71.0
+  npu: 50.5800018311
+}
+layer {
+  name: "back"
+  time_unit: "usec"
+  cpu: 19.0
+  gpu: 999999.0
+  npu: 999999.0
+}

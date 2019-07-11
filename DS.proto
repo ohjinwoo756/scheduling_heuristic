@@ -1,0 +1,30 @@
+syntax = "proto2";
+
+package DS;
+
+// NOTE
+// Update the next available ID when you add a new LayerParameter field.
+//
+// Layer for DS ID: 000 (last changed : 20180606)
+
+
+
+message network	{
+  optional string name = 1;
+
+	message Layer {
+	  optional string name = 1; // the layer name
+      optional string time_unit = 2; // time_unit: msec
+	  optional float cpu = 3; // cpu: 100
+	  optional float gpu = 4; // gpu: 200
+	  optional float dsp = 5; // dsp: 150
+	  optional float npu = 6; // npu: 50
+      optional float cpu2 = 7; // cpu: 100
+      optional float cpu3 = 8; // cpu: 100
+      optional float cpu4 = 9; // cpu: 100
+	}
+
+  repeated Layer layer = 2; 
+
+}
+
