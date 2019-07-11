@@ -9,7 +9,7 @@ input_dir_path = "galaxyS9_affin_profile_final"
 est_type = ["npu_x3", "basic", "npu_x10", "npu_x15"]
 
 # Feasible values on command args
-schedulers = ["GA", "ManualMapping", "AppBasedHeuristic", "LayerBasedHeuristic"]
+schedulers = ["GA", "ManualMapping", "AppBasedHeuristic", "LayerBasedHeuristic", "JHeuristic"]
 CPU_intraParall = ['4', '31', '22', '211', '1111']
 app_to_obj_dict = ['Throughput', 'Response_time']
 app_to_cst_dict = ['Deadline', 'None']

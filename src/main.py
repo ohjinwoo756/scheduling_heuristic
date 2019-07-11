@@ -293,8 +293,9 @@ def init_processors():
 if __name__ == '__main__':
     options = parse_options()
 
-    mapping_module = __import__(options.sched_method)
-    mapping_class = getattr(mapping_module, options.sched_method)
+    # Load scheduler
+    mapping_module = __import__(options.sched_method) # Dynamic import != Static import
+    mapping_class = getattr(mapping_module, options.sched_method) # (module name, class name)
 
     # Read network and estimation file
     nets = []
