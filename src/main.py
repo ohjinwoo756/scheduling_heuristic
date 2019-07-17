@@ -242,7 +242,7 @@ def make_layer_structure(idx, net):
         for out_l in out_layers:
             connections.remove((l, out_l))  # remove connection between reshape(concat) - output
 
-    layer_graph = LayerGraph(connections)
+    layer_graph = LayerGraph(connections) # XXX: layer precedences applied to 'layer_graph'
     return layer_graph, layer_list, name2layer
 
 
@@ -254,11 +254,14 @@ def make_estimation(idx, est, name2layer, pe_list):
         for v in pe_list:
             # FIXME there is assumption
             if 'cpu1' in v.name:
+                # In profile input, the first cpu is represented by 'cpu', not 'cpu1'
+                # getattr(l, 'cpu') extract 'cpu' attribute from estimation prototxt
                 layer_time.append(getattr(l, 'cpu'))
             elif 'cpu' in v.name:
                 layer_time.append(getattr(l, v.name[:4]))
-            else:
+            else: # gpu, npu, ...
                 layer_time.append(getattr(l, v.name[:3]))
+
         layer.set_time_list(layer_time)
 
 
@@ -312,13 +315,13 @@ if __name__ == '__main__':
     app_list = []
     prev_concat_num = 0
     for idx, n in enumerate(nets):
-        layer_graph, layer_list, name2layer = make_layer_structure(idx, n)
-        make_estimation(idx, ests[idx], name2layer, pe_list)
-        layer_graph.set_dfs_priority(layer_list[0])
-        layer_lists.append(layer_list)
+        layer_graph, layer_list, name2layer = make_layer_structure(idx, n) # layer precedences applied. dict: layer_graph._graph[node1] => node2
+        make_estimation(idx, ests[idx], name2layer, pe_list) # apply profile inputs -> layer.time_list
+        layer_graph.set_dfs_priority(layer_list[0]) # XXX later ...
+        layer_lists.append(layer_list) # set of layers 
         app = Application(config.nets[idx], layer_graph, layer_list, config.period[idx], config.priority[idx], prev_concat_num)
         prev_concat_num += app.get_num_concat()
-        app_list.append(app)
+        app_list.append(app) # set of apps
 
     layer_list = [j for i in layer_lists for j in i]
 

@@ -9,7 +9,7 @@ class DirectedGraph(object):
     """ Directed Graph data structure """
 
     def __init__(self, connections):
-        self._graph = defaultdict(set)
+        self._graph = defaultdict(set) # have layer precedence
         self.add_connections(connections)
 
     def add_connections(self, connections):

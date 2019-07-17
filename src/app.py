@@ -5,7 +5,7 @@ import config
 class Application:
     def __init__(self, name, graph, layer_list, period, priority, num_prev_concat):
         self.name = name
-        self.graph = graph
+        self.graph = graph # layer_graph
         self.layer_list = [l for l in layer_list if l.time_list is not None]
         for l in self.layer_list:
             l.set_app(self)
