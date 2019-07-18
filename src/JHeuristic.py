@@ -21,8 +21,7 @@ class JHeuristic(MapFunc):
 
     def do_schedule(self):
         self.make_optimistic_cost_table() # OCT (Optimistic Cost Table)
-        self.prioritize_tasks() # task prioritization phase
-        self.assign_task_to_processor() # processor selection phase
+        self.peft_algorithm()
 
         # mappings = [net_1_mappings, net_2_mappings, ...]
         # mappings = [0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 3, 3, 3, 2, 2, 2, 2, 2, 0, 0, 0, 0] # mnv1
@@ -44,9 +43,10 @@ class JHeuristic(MapFunc):
                 rank_oct = rank_oct / len(self.pe_list)
                 oct_layer_row.append(round(rank_oct, 2))
 
-                self.optimistic_cost_table.append(oct_layer_row)
+                self.optimistic_cost_table.append(oct_layer_row) # update table
+                layer.set_rank_oct(rank_oct) # update layer's rank_oct info
 
-        self.print_optimistic_cost_table() # debug
+        # self.print_optimistic_cost_table() # debug
 
 
     def calculate_optimistic_cost(self, app, task, processor):
@@ -126,9 +126,47 @@ class JHeuristic(MapFunc):
                 idx = idx + 1
 
 
-    def prioritize_tasks(self):
-        pass
+    def peft_algorithm(self):
+        ready_list = list()
+        ready_list.append(self.layer_list[0]) # put entry layer as initial task
+
+        target_layers = list() # entire target layers
+        layers_rank_oct = dict() # layers' rank oct value
+        for app in self.app_list:
+            for layer in app.layer_list:
+                target_layers.append(layer)
+                layers_rank_oct[layer] = layer.get_rank_oct()
+        target_layers.remove(self.layer_list[0]) # remove entry layer from entire target layers
+
+        while ready_list != []: # until ready_list is NOT Empty
+            highest_prio_layer = ready_list[0] # the first one
+            min_oeft_processor = None
+            min_oeft_value = float('inf')
+            for processor in self.pe_list:
+                # 1. compute EFT 
+                # 2. compute OEFT 
+                oeft_value = self.compute_oeft_value(highest_prio_layer, processor)
+                if oeft_value < min_oeft_value:
+                    min_oeft_processor = processor
+                    min_oeft_value = oeft_value
+            highest_prio_layer.set_pe(min_oeft_processor) # assign processor to a layer
+            ready_list = self.update_layer_ready_list(target_layers, ready_list, layers_rank_oct)
 
 
-    def assign_task_to_processor(self):
-        pass
+    def compute_oeft_value(layer, processor):
+        return 100
+
+    def update_layer_ready_list(self, target_layers, ready_list, layers_rank_oct):
+        ready_list.remove(ready_list[0]) # remove already-pe-assigned layer
+        runnable_layers_list = self.extract_runnable_layers_from(target_layers)
+        for l in runnable_layers_list: # insert runnable layers to ready_list
+            ready_list.append(l)
+        ready_list = sorted(ready_list, key=layers_rank_oct.__getitem__, reverse=True) # sort
+        return ready_list
+
+
+    def extract_runnable_layers_from(self, target_layers):
+        runnable_layers_list = list()
+        # 1. extract
+        # 2. remove
+        return runnable_layers_list

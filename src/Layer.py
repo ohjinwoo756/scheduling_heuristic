@@ -45,6 +45,7 @@ class Layer(object):
     kernel_size = None
 
     pe = None
+    rank_oct = None
 
     def __init__(self, name, layer_type, num_output, in_size=[0, 0], kernel_size=0, pad=0, stride=1, is_start_node=False, is_end_node=False):
         self.unique_index = Layer.newid()
@@ -159,6 +160,9 @@ class Layer(object):
     def set_increase_prio(self):
         self.priority = Layer.unique_prio()
 
+    def set_rank_oct(self, rank_oct):
+        self.rank_oct = rank_oct
+
     def get_priority(self):
         return self.priority
 
@@ -184,6 +188,9 @@ class Layer(object):
 
     def get_mem_size(self):
         return self.mem_size
+
+    def get_rank_oct(self):
+        return self.rank_oct
 
     def __str__(self):
         return '{:>10} ({:>3}) | {:>4} x {:>4} x {:>5} | {}'.format(self.name, str(self.priority), str(self.size[1]), str(self.size[0]), str(self.num_output), str(self.time_list))
