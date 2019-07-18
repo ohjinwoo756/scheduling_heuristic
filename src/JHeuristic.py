@@ -20,9 +20,7 @@ class JHeuristic(MapFunc):
 
 
     def do_schedule(self):
-        self.make_optimistic_cost_table()
-        self.print_optimistic_cost_table() # debug
-
+        self.make_optimistic_cost_table() # OCT (Optimistic Cost Table)
         self.prioritize_tasks() # task prioritization phase
         self.assign_task_to_processor() # processor selection phase
 
@@ -38,7 +36,17 @@ class JHeuristic(MapFunc):
                 oct_layer_row = list() # represents a row(task) in oct (optimistic cost table)
                 for pe in self.pe_list:
                     oct_layer_row.append(self.calculate_optimistic_cost(app, layer, pe))
+
+                # calculate rank_oct (average)
+                rank_oct = 0
+                for idx in range(0, len(oct_layer_row)):
+                    rank_oct = rank_oct + oct_layer_row[idx]
+                rank_oct = rank_oct / len(self.pe_list)
+                oct_layer_row.append(round(rank_oct, 2))
+
                 self.optimistic_cost_table.append(oct_layer_row)
+
+        self.print_optimistic_cost_table() # debug
 
 
     def calculate_optimistic_cost(self, app, task, processor):
@@ -46,7 +54,7 @@ class JHeuristic(MapFunc):
             return self.optimistic_cost_hash[(task.name, processor.name)]
         else:
             if task.is_end_node:
-                self.optimistic_cost_hash[(task.name, processor.name)] = 0
+                self.optimistic_cost_hash[(task.name, processor.name)] = round(0, 2)
                 return self.optimistic_cost_hash[(task.name, processor.name)]
             else:
                 max_value = -float('inf')
@@ -69,7 +77,7 @@ class JHeuristic(MapFunc):
                     if min_value > max_value:
                         max_value = min_value
 
-                optimistic_cost = max_value
+                optimistic_cost = round(max_value, 2)
                 self.optimistic_cost_hash[(task.name, processor.name)] = optimistic_cost
                 return optimistic_cost
 
