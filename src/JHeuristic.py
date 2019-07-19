@@ -13,7 +13,7 @@ class JHeuristic(MapFunc):
         self.num_app = len(app_list)
         self.num_layer = len(self.layer_list)
         self.num_pe = len(pe_list)
-        self.fitness = Fitness(app_list, pe_list) # calculate mapping's fitness value
+        self.fitness = Fitness(app_list, pe_list) # compute mapping's fitness value
 
         self.optimistic_cost_table = list()
         self.optimistic_cost_hash = dict() # for speed up
@@ -34,9 +34,9 @@ class JHeuristic(MapFunc):
             for layer in app.layer_list:
                 oct_layer_row = list() # represents a row(task) in oct (optimistic cost table)
                 for pe in self.pe_list:
-                    oct_layer_row.append(self.calculate_optimistic_cost(app, layer, pe))
+                    oct_layer_row.append(self.compute_optimistic_cost(app, layer, pe))
 
-                # calculate rank_oct (averaged)
+                # compute rank_oct (averaged)
                 rank_oct = 0
                 for idx in range(0, len(oct_layer_row)):
                     rank_oct = rank_oct + oct_layer_row[idx]
@@ -50,7 +50,7 @@ class JHeuristic(MapFunc):
         # self.print_optimistic_cost_table()
 
 
-    def calculate_optimistic_cost(self, app, task, processor):
+    def compute_optimistic_cost(self, app, task, processor):
         if (task.name, processor.name) in self.optimistic_cost_hash: # if already computed
             return self.optimistic_cost_hash[(task.name, processor.name)]
 
@@ -69,8 +69,8 @@ class JHeuristic(MapFunc):
                         self.assign_temporal_processor(successor, pe)
                         self.assign_temporal_edge_type_between(task, successor)
 
-                        value = self.calculate_optimistic_cost(app, successor, pe) + 
-                                    successor.time_list[pe.idx] + 
+                        value = self.compute_optimistic_cost(app, successor, pe) + \
+                                    successor.time_list[pe.idx] + \
                                     app.graph._edge[(task, successor)].calc_transition_time()
                         
                         # XXX: initialize temporal assignment
