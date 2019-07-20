@@ -13,20 +13,18 @@ class JHeuristic(MapFunc):
         self.num_app = len(app_list)
         self.num_layer = len(self.layer_list)
         self.num_pe = len(pe_list)
-        self.fitness = Fitness(app_list, pe_list) # compute mapping's fitness value
+        self.fitness = Fitness(app_list, pe_list) # compute mapping's fitness
 
         self.optimistic_cost_table = list()
         self.optimistic_cost_hash = dict() # for speed up
+
+        self.processor_available_time_list = list(range(self.num_pe))
 
 
     def do_schedule(self):
         self.make_optimistic_cost_table()
         self.peft_algorithm()
-
-        # mappings = [net_1_mappings, net_2_mappings, ...]
-        # mappings = [0, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 1, 1, 1, 3, 3, 3, 2, 2, 2, 2, 2, 0, 0, 0, 0] # mnv1
-        # return [mappings] # XXX: [ [], [], [], ... ]: pareto results
-        return [] # no solution
+        return self.get_mappings()
 
 
     def make_optimistic_cost_table(self):
@@ -135,47 +133,59 @@ class JHeuristic(MapFunc):
         ready_list = list()
         ready_list.append(self.layer_list[0]) # put entry layer as initial task
 
-        target_layers = list() # entire target layers
-        layers_rank_oct = dict() # layers' rank oct value
+        target_layers = list()
+        layers_rank_oct = dict() # layers' rank oct
         for app in self.app_list:
-            for layer in app.layer_list:
+            for layer in app.layer_list: # initial target layers : ALL layers
                 target_layers.append(layer)
                 layers_rank_oct[layer] = layer.get_rank_oct()
-        # XXX: entry layer removed from entire target layers bacause it was processed.
+
+        # XXX: entry layer removed for next function call 'update_layer_ready_list'
         target_layers.remove(self.layer_list[0])
 
         while ready_list != []: # until ready_list is NOT Empty
             highest_prio_layer = ready_list[0] # the first one
             min_oeft_processor = None
-            min_oeft_value = float('inf')
+            min_oeft = float('inf')
             for processor in self.pe_list:
-                oeft_value = self.compute_oeft_value(highest_prio_layer, processor)
-                if oeft_value < min_oeft_value:
+                oeft = self.compute_oeft(highest_prio_layer, processor)
+                if oeft < min_oeft: # XXX: processor selection phase
                     min_oeft_processor = processor
-                    min_oeft_value = oeft_value
+                    min_oeft = oeft
 
             # XXX: update layer's processor info
             highest_prio_layer.set_pe(min_oeft_processor)
+
+            # XXX: update processor_available_time_list
+            self.processor_available_time_list[min_oeft_processor.idx] \
+                    += highest_prio_layer.time_list[min_oeft_processor.idx]
+            # XXX: TODO: comm time computation here !!
+
+            # XXX: update layer's finish time & pe_mapped value
+            highest_prio_layer.finish_time = self.processor_available_time_list[min_oeft_processor.idx]
+            highest_prio_layer.set_pe_mapped(True)
+
+            # XXX: update ready list
             ready_list = self.update_layer_ready_list(target_layers, ready_list, layers_rank_oct)
 
 
-    def compute_oeft_value(self, layer, processor):
+    def compute_oeft(self, layer, processor):
         oct_value = self.optimistic_cost_table[layer.index][processor.idx]
-        eft_value = self.compute_eft_value(layer, processor)
-        return oct_value + eft_value
+        eft = self.compute_eft(layer, processor)
+        return oct_value + eft
 
 
-    def compute_eft_value(self, layer, processor):
-        est_value = self.compute_est_value(layer, processor)
-        return est_value + layer.time_list[processor.idx]
+    def compute_eft(self, layer, processor):
+        est = self.compute_est(layer, processor)
+        return est + layer.time_list[processor.idx]
 
 
-    def compute_est_value(self, layer, processor):
+    def compute_est(self, layer, processor):
         in_edges_list = list(layer.app.graph._in_edge[layer])
         if in_edges_list == []: # If there is no preceding edge
             return 0
         else:
-            pe_available_time = self.compute_pe_available_time(processor)
+            pe_available_time = self.processor_available_time_list[processor.idx]
 
             precedents = list()
             for e in in_edges_list:
@@ -183,15 +193,15 @@ class JHeuristic(MapFunc):
 
             max_sum_aft_comm = -float('inf')
             for prior in precedents:
-                aft_value = self.compute_aft_value(prior)
+                aft = prior.finish_time
 
                 # XXX: precedents already have assigned processor
                 # XXX: processor assigned to layer temporarily
                 self.assign_temporal_processor(layer, processor)
-                self.assign_temporal_edge_type_between(prio, layer)
+                self.assign_temporal_edge_type_between(prior, layer)
 
-                comm_time = app.graph._edge[(prior, layer)].calc_transition_time()
-                sum_aft_comm = aft_value + comm_time
+                comm_time = prior.app.graph._edge[(prior, layer)].calc_transition_time()
+                sum_aft_comm = aft + comm_time
                 if sum_aft_comm > max_sum_aft_comm:
                     max_sum_aft_comm = sum_aft_comm
 
@@ -202,28 +212,52 @@ class JHeuristic(MapFunc):
             return max(pe_available_time, max_sum_aft_comm)
 
 
-    # TODO: not implemented yet
-    def compute_pe_available_time(self, processor):
-        return 100
-
-
-    # TODO: not implemented yet
-    def compute_aft_value(self, layer):
-        return 100
-
-
     def update_layer_ready_list(self, target_layers, ready_list, layers_rank_oct):
-        ready_list.remove(ready_list[0]) # remove already-pe-assigned layer
+        del ready_list[0] # remove already mapped layer
+
         runnable_layers_list = self.extract_runnable_layers_from(target_layers)
         for l in runnable_layers_list: # insert runnable layers to ready_list
             ready_list.append(l)
         ready_list = sorted(ready_list, key=layers_rank_oct.__getitem__, reverse=True) # sort
+
+        # debug
+        # print ready_list
         return ready_list
 
 
-    # TODO: not implemented yet
     def extract_runnable_layers_from(self, target_layers):
         runnable_layers_list = list()
-        # 1. extract
-        # 2. remove
+        for layer in target_layers:
+            is_runnable = True
+            if list(layer.app.graph._in_edge[layer]) != []:
+                for in_edges in list(layer.app.graph._in_edge[layer]):
+                    if not in_edges.sender.pe_mapped:
+                        is_runnable = False
+                        break
+                    
+            if is_runnable:
+                runnable_layers_list.append(layer)
+
+        # update target layers
+        for layer in runnable_layers_list:
+            target_layers.remove(layer)
+
         return runnable_layers_list
+
+
+    def get_mappings(self):
+        # XXX: mappings = [[mapping], [mapping], ...] # pareto result possible
+        # XXX: But in JHeuristic, there is only one solution
+        mappings = [0] * len(self.layer_list)
+
+        idx = 0
+        for app in self.app_list:
+            for layer in app.layer_list:
+                mappings[idx] = layer.pe.get_idx()
+                idx = idx + 1
+
+        # debug
+        print mappings
+        return mappings
+
+
