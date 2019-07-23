@@ -24,6 +24,7 @@ class JHeuristic(MapFunc):
     def do_schedule(self):
         self.make_optimistic_cost_table()
         self.peft_algorithm()
+
         return self.get_mappings()
 
 
@@ -147,25 +148,44 @@ class JHeuristic(MapFunc):
             highest_prio_layer = ready_list[0] # the first one
             min_oeft_processor = None
             min_oeft = float('inf')
-            for processor in self.pe_list:
+
+            if highest_prio_layer.is_start_node or highest_prio_layer.is_end_node: # if frontend or backend
+                target_pe_list = self.pe_list[:len(config.cpu_config)] # XXX: if node is frontend or backend, only cpu processor can be mapped.
+            else:
+                target_pe_list = self.pe_list # XXX: other layers can be mapped to any processor.
+
+            for processor in target_pe_list:
                 oeft = self.compute_oeft(highest_prio_layer, processor)
                 if oeft < min_oeft: # XXX: processor selection phase
                     min_oeft_processor = processor
                     min_oeft = oeft
 
-            # XXX: update layer's processor info
+            # print min_oeft_processor.name
+            # update actual layer's pe info
             highest_prio_layer.set_pe(min_oeft_processor)
 
-            # XXX: update processor_available_time_list
+            # XXX: no need for temporal assignment, because it was already mapped in real.
+            # 1. update processor_available_time_list (exec time)
             self.processor_available_time_list[min_oeft_processor.idx] \
                     += highest_prio_layer.time_list[min_oeft_processor.idx]
-            # XXX: TODO: comm time computation here !!
 
-            # XXX: update layer's finish time & pe_mapped value
+            # TODO 2. update processor_available_time_list (comm time)
+            in_edges_list = list(highest_prio_layer.app.graph._in_edge[highest_prio_layer])
+            if in_edges_list == []: # if there is no preceding edge (entry node)
+                pass
+            else:
+                pre_finish_and_comm_time_list = list()
+                for e in in_edges_list:
+                    pre_finish_and_comm_time_list.append(e.sender.finish_time + \
+                            e.calc_transition_time())
+                self.processor_available_time_list[min_oeft_processor.idx] \
+                        += max(pre_finish_and_comm_time_list)
+
+            # update layer's finish time & pe_mapped (bool)
             highest_prio_layer.finish_time = self.processor_available_time_list[min_oeft_processor.idx]
             highest_prio_layer.set_pe_mapped(True)
 
-            # XXX: update ready list
+            # update ready list
             ready_list = self.update_layer_ready_list(target_layers, ready_list, layers_rank_oct)
 
 
@@ -249,7 +269,6 @@ class JHeuristic(MapFunc):
         # XXX: mappings = [[mapping], [mapping], ...] # pareto result possible
         # XXX: But in JHeuristic, there is only one solution
         mappings = [0] * len(self.layer_list)
-
         idx = 0
         for app in self.app_list:
             for layer in app.layer_list:
@@ -257,7 +276,6 @@ class JHeuristic(MapFunc):
                 idx = idx + 1
 
         # debug
-        print mappings
-        return mappings
+        return [mappings]
 
 

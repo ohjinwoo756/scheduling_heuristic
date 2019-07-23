@@ -335,21 +335,21 @@ if __name__ == '__main__':
     # scheduling
     mappings = mapper.do_schedule()
 
-    #  # for Gantt chart (not fitness calculation)
-    #  sched_sim = SchedSimulator(app_list, pe_list)
-    #  # draw gantt
-    #  for m in mappings:
-    #      PE.init_apps_pe_by_mapping(app_list, m, pe_list)
-    #      sched_sim.do_init()
-    #      name = ""
-    #      for n in config.nets:
-    #          name += n
-    #          name += "_"
-    #      objs = []
-    #      csts = []
-    #      for obj in mapper.fitness.objs:
-    #          objs.append(type(obj).__name__)
-    #      for cst in mapper.fitness.csts:
-    #          csts.append(type(cst).__name__)
-    #      gantt_name = "{}_{}_{}_{}_{}_{}_{}.png".format(options.save_path + "/" + name, str(config.priority), str(config.period), str(options.cpu_core_distribution), str(objs), str(csts), config.analyzer)
-    #      sched_sim.do_simulation(m, (0, 5), True, gantt_name, mapper.fitness)
+    # for Gantt chart (not fitness calculation)
+    sched_sim = SchedSimulator(app_list, pe_list)
+    # draw gantt
+    for m in mappings:
+        PE.init_apps_pe_by_mapping(app_list, m, pe_list)
+        sched_sim.do_init()
+        name = ""
+        for n in config.nets:
+            name += n
+            name += "_"
+        objs = []
+        csts = []
+        for obj in mapper.fitness.objs:
+            objs.append(type(obj).__name__)
+        for cst in mapper.fitness.csts:
+            csts.append(type(cst).__name__)
+        gantt_name = "{}_{}_{}_{}_{}_{}_{}.png".format(options.save_path + "/" + name, str(config.priority), str(config.period), str(options.cpu_core_distribution), str(objs), str(csts), config.analyzer)
+        sched_sim.do_simulation(m, (0, 5), True, gantt_name, mapper.fitness)
