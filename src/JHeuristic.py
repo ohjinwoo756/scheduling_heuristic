@@ -18,7 +18,7 @@ class JHeuristic(MapFunc):
         self.optimistic_cost_table = list()
         self.optimistic_cost_hash = dict() # for speed up
 
-        self.processor_available_time_list = list(range(self.num_pe))
+        self.processor_available_time_list = [0] * self.num_pe
 
 
     def do_schedule(self):
@@ -132,7 +132,9 @@ class JHeuristic(MapFunc):
 
     def peft_algorithm(self):
         ready_list = list()
-        ready_list.append(self.layer_list[0]) # put entry layer as initial task
+        # put entry layer per application as initial task
+        for app_idx in range(0, len(self.app_list)):
+            ready_list.append(self.app_list[app_idx].layer_list[0])
 
         target_layers = list()
         layers_rank_oct = dict() # layers' rank oct
@@ -141,10 +143,16 @@ class JHeuristic(MapFunc):
                 target_layers.append(layer)
                 layers_rank_oct[layer] = layer.get_rank_oct()
 
-        # XXX: entry layer removed for next function call 'update_layer_ready_list'
-        target_layers.remove(self.layer_list[0])
+        ready_list = sorted(ready_list, key=layers_rank_oct.__getitem__, reverse=True) # initial sorting
+        # XXX: entry layer per application removed for next function call 'update_layer_ready_list'
+        for app_idx in range(0, len(self.app_list)):
+            layer = self.app_list[app_idx].layer_list[0]
+            target_layers.remove(layer)
 
+        # print self.processor_available_time_list
+        # print "  "
         while ready_list != []: # until ready_list is NOT Empty
+            # print "ready_list: ", ready_list
             highest_prio_layer = ready_list[0] # the first one
             min_oeft_processor = None
             min_oeft = float('inf')
@@ -160,29 +168,41 @@ class JHeuristic(MapFunc):
                     min_oeft_processor = processor
                     min_oeft = oeft
 
-            # print min_oeft_processor.name
             # update actual layer's pe info
             highest_prio_layer.set_pe(min_oeft_processor)
+            # print "highest_prio_layer: ", highest_prio_layer.name
+            # print "min_oeft_processor: ", min_oeft_processor.name
+            # print "BEFORE | ", self.processor_available_time_list
 
             # XXX: no need for temporal assignment, because it was already mapped in real.
-            # 1. update processor_available_time_list (exec time)
-            self.processor_available_time_list[min_oeft_processor.idx] \
-                    += highest_prio_layer.time_list[min_oeft_processor.idx]
-
-            # TODO 2. update processor_available_time_list (comm time)
+            # update processor_available_time_list
             in_edges_list = list(highest_prio_layer.app.graph._in_edge[highest_prio_layer])
             if in_edges_list == []: # if there is no preceding edge (entry node)
-                pass
+                self.processor_available_time_list[min_oeft_processor.idx] = \
+                        round(highest_prio_layer.time_list[min_oeft_processor.idx], 2)
             else:
-                pre_finish_and_comm_time_list = list()
+                max_pre_finish_and_comm_time = -float('inf')
                 for e in in_edges_list:
-                    pre_finish_and_comm_time_list.append(e.sender.finish_time + \
-                            e.calc_transition_time())
-                self.processor_available_time_list[min_oeft_processor.idx] \
-                        += max(pre_finish_and_comm_time_list)
+                    self.assign_temporal_edge_type_between(e.sender, highest_prio_layer) # assign pe
+                    # print "sender: ", e.sender, " | receiver: ", e.receiver
+                    # print "e.sender.finish_time", e.sender.finish_time
+                    # print "e.calc_transition_time: ", e.calc_transition_time()
+                    pre_finish_and_comm_time = e.sender.finish_time + \
+                            e.calc_transition_time()
+                    if pre_finish_and_comm_time > max_pre_finish_and_comm_time:
+                        max_pre_finish_and_comm_time = pre_finish_and_comm_time
+                self.processor_available_time_list[min_oeft_processor.idx] = \
+                        max_pre_finish_and_comm_time + \
+                        round(highest_prio_layer.time_list[min_oeft_processor.idx], 2)
 
-            # update layer's finish time & pe_mapped (bool)
+            # print "AFTER | ", self.processor_available_time_list
+
+            # update processor_available_time_list to layer's finish time
             highest_prio_layer.finish_time = self.processor_available_time_list[min_oeft_processor.idx]
+            # print "highest_prio_layer.finish_time: ", highest_prio_layer.finish_time
+            # print "  "
+
+            # update layer's pe_mapped value
             highest_prio_layer.set_pe_mapped(True)
 
             # update ready list
@@ -234,14 +254,11 @@ class JHeuristic(MapFunc):
 
     def update_layer_ready_list(self, target_layers, ready_list, layers_rank_oct):
         del ready_list[0] # remove already mapped layer
-
         runnable_layers_list = self.extract_runnable_layers_from(target_layers)
         for l in runnable_layers_list: # insert runnable layers to ready_list
             ready_list.append(l)
         ready_list = sorted(ready_list, key=layers_rank_oct.__getitem__, reverse=True) # sort
 
-        # debug
-        # print ready_list
         return ready_list
 
 
@@ -249,7 +266,7 @@ class JHeuristic(MapFunc):
         runnable_layers_list = list()
         for layer in target_layers:
             is_runnable = True
-            if list(layer.app.graph._in_edge[layer]) != []:
+            if list(layer.app.graph._in_edge[layer]) != []: # if precedent exists
                 for in_edges in list(layer.app.graph._in_edge[layer]):
                     if not in_edges.sender.pe_mapped:
                         is_runnable = False
@@ -276,6 +293,7 @@ class JHeuristic(MapFunc):
                 idx = idx + 1
 
         # debug
+        # print [mappings]
         return [mappings]
 
 
