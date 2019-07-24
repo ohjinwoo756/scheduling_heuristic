@@ -24,8 +24,9 @@ class JHeuristic(MapFunc):
     def do_schedule(self):
         self.make_optimistic_cost_table()
         self.peft_algorithm()
+        mappings = self.get_mappings()
 
-        return self.get_mappings()
+        return mappings
 
 
     def make_optimistic_cost_table(self):
@@ -174,26 +175,9 @@ class JHeuristic(MapFunc):
             # print "min_oeft_processor: ", min_oeft_processor.name
             # print "BEFORE | ", self.processor_available_time_list
 
-            # XXX: no need for temporal assignment, because it was already mapped in real.
-            # update processor_available_time_list
-            in_edges_list = list(highest_prio_layer.app.graph._in_edge[highest_prio_layer])
-            if in_edges_list == []: # if there is no preceding edge (entry node)
-                self.processor_available_time_list[min_oeft_processor.idx] = \
-                        round(highest_prio_layer.time_list[min_oeft_processor.idx], 2)
-            else:
-                max_pre_finish_and_comm_time = -float('inf')
-                for e in in_edges_list:
-                    self.assign_temporal_edge_type_between(e.sender, highest_prio_layer) # assign pe
-                    # print "sender: ", e.sender, " | receiver: ", e.receiver
-                    # print "e.sender.finish_time", e.sender.finish_time
-                    # print "e.calc_transition_time: ", e.calc_transition_time()
-                    pre_finish_and_comm_time = e.sender.finish_time + \
-                            e.calc_transition_time()
-                    if pre_finish_and_comm_time > max_pre_finish_and_comm_time:
-                        max_pre_finish_and_comm_time = pre_finish_and_comm_time
-                self.processor_available_time_list[min_oeft_processor.idx] = \
-                        max_pre_finish_and_comm_time + \
-                        round(highest_prio_layer.time_list[min_oeft_processor.idx], 2)
+            # XXX: processor_available_time_list affects to layer's finish time
+            # XXX: then it affects to AFT value
+            self.update_processor_available_time_list_peft(highest_prio_layer, min_oeft_processor)
 
             # print "AFTER | ", self.processor_available_time_list
 
@@ -282,6 +266,28 @@ class JHeuristic(MapFunc):
         return runnable_layers_list
 
 
+    def update_processor_available_time_list_peft(self, highest_prio_layer, min_oeft_processor):
+        # update processor_available_time_list
+        in_edges_list = list(highest_prio_layer.app.graph._in_edge[highest_prio_layer])
+        if in_edges_list == []: # if there is no preceding edge (entry node)
+            self.processor_available_time_list[min_oeft_processor.idx] = \
+                    round(highest_prio_layer.time_list[min_oeft_processor.idx], 2)
+        else:
+            max_pre_finish_and_comm_time = -float('inf')
+            for e in in_edges_list:
+                self.assign_temporal_edge_type_between(e.sender, highest_prio_layer) # assign pe
+                # print "sender: ", e.sender, " | receiver: ", e.receiver
+                # print "e.sender.finish_time", e.sender.finish_time
+                # print "e.calc_transition_time: ", e.calc_transition_time()
+                pre_finish_and_comm_time = e.sender.finish_time + \
+                        e.calc_transition_time()
+                if pre_finish_and_comm_time > max_pre_finish_and_comm_time:
+                    max_pre_finish_and_comm_time = pre_finish_and_comm_time
+            self.processor_available_time_list[min_oeft_processor.idx] = \
+                    max_pre_finish_and_comm_time + \
+                    round(highest_prio_layer.time_list[min_oeft_processor.idx], 2)
+
+
     def get_mappings(self):
         # XXX: mappings = [[mapping], [mapping], ...] # pareto result possible
         # XXX: But in JHeuristic, there is only one solution
@@ -294,6 +300,11 @@ class JHeuristic(MapFunc):
 
         # debug
         # print [mappings]
+        print "====================================================="
+        for app in self.app_list:
+            print app.name, app.layer_list[len(app.layer_list)-1].name, "| finish time:", app.layer_list[len(app.layer_list)-1].finish_time
+        print "====================================================="
+
         return [mappings]
 
 
