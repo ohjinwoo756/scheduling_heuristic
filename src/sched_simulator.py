@@ -48,7 +48,7 @@ class SchedSimulator(object):
         self.num_layer = len(self.layer_list)
         self.throughput_thresh = 100
 
-        self.draw_iteration = 2
+        self.draw_iteration = 1
 
         self.num_pe = len(pe_list)
 
@@ -222,6 +222,7 @@ class SchedSimulator(object):
 
                 # Update iteration's end time
                 self._set_pe_time(pe, l.iteration, t, occupy_times[pe_idx])
+                # self._set_pe_time(pe, l.iteration, l.get_start_time(), occupy_times[pe_idx])
 
                 self.iteration[layer_idx] = self.iteration[layer_idx] + 1
                 self._update_timeline(l, occupy_times[pe_idx])
@@ -229,14 +230,17 @@ class SchedSimulator(object):
 
                 if l.iteration <= 1:
                     time_tuple = (pe, l, t, end_time, transition_time)
+                    # time_tuple = (pe, l, l.get_start_time(), end_time, transition_time)
                     sched.add_sched(time_tuple)
 
                 # FIXME What is second condition?
                 if draw_gantt and occupy_times[pe_idx] != t and l.iteration <= self.draw_iteration:
                     time_tuple = (l.get_name(), self.pe_list[pe].name, t, end_time, transition_time)
+                    # time_tuple = (l.get_name(), self.pe_list[pe].name, l.get_start_time(), end_time, transition_time)
                     gantt.add_task(time_tuple)
 
                 self.elapsed_time_per_pe[pe_idx] += (end_time - t)
+                # self.elapsed_time_per_pe[pe_idx] += (end_time - l.get_start_time())
 
                 if l.is_end_node and l.iteration == 1:
                     self.response_time[self.app_list.index(app)] = end_time

@@ -91,6 +91,7 @@ class Layer(object):
             self.offset = 0
             self.need_in_edge_check = True
 
+        self.start_time = 0
         self.finish_time = None
         self.pe_mapped = False
 
@@ -194,6 +195,12 @@ class Layer(object):
 
     def get_rank_oct(self):
         return self.rank_oct
+
+    def set_start_time(self, time):
+        self.start_time = time
+
+    def get_start_time(self):
+        return self.start_time
 
     def set_finish_time(self, time):
         self.finish_time = time

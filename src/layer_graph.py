@@ -269,6 +269,7 @@ class LayerGraph(DirectedGraph):
         transition_time = 0
         for out_edge in self._out_edge[node]:
             transition_time += out_edge.calc_transition_time()
+            out_edge.receiver.set_start_time(t + exec_time + transition_time)
             out_edge.produce_data(t + exec_time + transition_time)
 
         return exec_time, transition_time

@@ -38,13 +38,14 @@ class MobilityAnalyzer(Analyzer):
                 for a in self.app_list:
                     if a is app:
                         break
-                    # demand += self.dbf[a].get_max_demand(pe, app.get_period())
+                    # XXX: 2-1. demand += higher priority max demand
                     demand += self.dbf[a].get_max_demand(pe, self._max_mobility + t.time_list[pe])
 
                 if demand == 0.:
                     continue
 
             # print("PE {}] Period {:.2f}\tMax_Mobility {:.2f}\tDemand {:.2f}".format(pe, app.get_period(), self._max_mobility, demand))
+                # XXX: 2-2. update demand to layer's mobility
                 t.set_mobility(t.mobility - demand)
                 # print("\t-> {t.name:>12s}\tmobility {t.mobility:.2f}".format(t=t))
 
@@ -93,13 +94,17 @@ class MobilityAnalyzer(Analyzer):
         app = self.app
         last_layer = app.layer_list[-1]
         if app.get_priority() != 1:
+            # XXX: 2. update mobility for each layer
+            # cover effect from higher priority
             self._update_mobility()
 
         pe = self.mapping[last_layer.get_index()]
         _, lp_max_exec = self._get_lp_max_exec(pe, app.get_priority())
 
+        # XXX: 3. cover effect from lower priority
         return 1024 * max(-(last_layer.mobility - lp_max_exec), 0)
 
+    # XXX: 1. set initial mobility for each layer
     def preprocess(self, mapping):
         app = self.app
         first_layer = app.layer_list[0]
@@ -107,8 +112,9 @@ class MobilityAnalyzer(Analyzer):
         self.mapping = mapping
         self.dbf = {}
         for a in self.app_list:
-            if a is app:
+            if a is app: # only higher priority
                 break
+            # XXX: DBF calculation only covers apps with higher priority
             self.dbf[a] = DemandFunction(a, mapping, self.pe_list)
 
         self.sched_sim.do_init()
@@ -116,8 +122,13 @@ class MobilityAnalyzer(Analyzer):
         response_time = self.sched_sim.get_response_time(app)
         self.pe2layer = [[] for _ in self.pe_list]
         for layer in app.layer_list:
+	    # XXX: used when drawing gantt chart !!! (IMPORTANT)
+	    # print first_layer.get_period()
+	    # print "!!!"
             self._max_mobility = max(first_layer.get_period() - response_time, 0)
             layer.set_mobility(first_layer.get_period() - response_time)
+
+            # XXX: self.pe2layer has preprocessed layers
             self.pe2layer[mapping[layer.get_index()]].append(layer)
 
     def get_violated_layer(self):
