@@ -152,6 +152,8 @@ class JHeuristic(MapFunc):
 
 
     def peft_algorithm(self, target_app, is_multiple=False):
+        self.initialize_erstwhile_mappings(target_app) # XXX initialization
+
         ready_list = list()
         # put entry layer as an initial task
         ready_list.append(target_app.layer_list[0])
@@ -184,9 +186,9 @@ class JHeuristic(MapFunc):
                 oeft = self.compute_oeft(highest_prio_layer, processor)
 
                 # XXX For scheduling of multiple apps
-                if is_multiple:
-                    self.initialize_erstwhile_mappings(target_app)
-                    oeft = oeft + self.get_penalty_by_erstwhile_mappings(highest_prio_layer, processor)
+                # if is_multiple:
+                # # if True:
+                #     oeft = oeft - self.get_penalty_by_erstwhile_mappings(highest_prio_layer, processor)
 
                 if oeft < min_oeft: # XXX: processor selection phase
                     min_oeft_processor = processor
@@ -271,7 +273,7 @@ class JHeuristic(MapFunc):
 
 
     def get_penalty_by_erstwhile_mappings(self, target_layer, target_pe):
-        hyper_params = 0.3
+        hyper_params = 0.2
         penalty = self.current_vacancy_per_pe[target_pe.idx] * hyper_params
         self.current_vacancy_per_pe[target_pe.idx] = \
                 self.current_vacancy_per_pe[target_pe.idx] - target_layer.time_list[target_pe.idx]
@@ -348,7 +350,6 @@ class JHeuristic(MapFunc):
                 idx = idx + 1
 
         # debug
-        # print [mappings]
         print "====================================================="
         for app in self.app_list:
             print app.name, app.layer_list[len(app.layer_list)-1].name, "| finish time:", app.layer_list[len(app.layer_list)-1].finish_time
