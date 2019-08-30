@@ -122,9 +122,7 @@ class MobilityAnalyzer(Analyzer):
         response_time = self.sched_sim.get_response_time(app)
         self.pe2layer = [[] for _ in self.pe_list]
         for layer in app.layer_list:
-	    # XXX: used when drawing gantt chart !!! (IMPORTANT)
-	    # print first_layer.get_period()
-	    # print "!!!"
+	    # XXX: used when drawing gantt chart
             self._max_mobility = max(first_layer.get_period() - response_time, 0)
             layer.set_mobility(first_layer.get_period() - response_time)
 

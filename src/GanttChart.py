@@ -30,6 +30,8 @@ class GanttChart:
 
     def add_task(self, result):
         # result_list has tuple (layer_name, processor_name, start_time, end_time, mem_transition_time)
+        # debug
+	# print [result[0], result[1], result[2], result[3], result[4]]
         self.task_list.append([result[0], result[1], result[2], result[3]])
         if result[4] != 0:
             self.task_list.append(['overhead', result[1], result[3], result[3] + result[4]])

@@ -45,7 +45,6 @@ class Layer(object):
     kernel_size = None
 
     pe = None
-    rank_oct = None
 
     def __init__(self, name, layer_type, num_output, in_size=[0, 0], kernel_size=0, pad=0, stride=1, is_start_node=False, is_end_node=False):
         self.unique_index = Layer.newid()
@@ -94,6 +93,7 @@ class Layer(object):
         self.start_time = 0
         self.finish_time = None
         self.pe_mapped = False
+	self.rank_oct = None
 
     def set_offset(self, o):
         self.offset = o

@@ -149,6 +149,8 @@ class SchedSimulator(object):
                 available_results = False
                 break
 
+        result_value_list = None # initialize
+
         if available_results:
             print("\nPE Mapping per layer: " + str(mapping))
 
@@ -164,13 +166,17 @@ class SchedSimulator(object):
                 if idx >= config.num_of_app:
                     print("\t\tConstraint function value [by %s] :\t %.2f -> %.2f" % (type(cst).__name__, value[-1], value[0]))
 
+            result_value_list = [0] * config.num_of_app
             for idx, app in enumerate(self.app_list):
                 print("\n\t[ %s (Period: %d, Priority: %d) ]" % (app.name, app.get_period(), app.get_priority()))
                 print("\t\tObjective function value [by %s]:\t%.2f" % (config.app_to_obj_dict[idx], objs[idx][0]))
+                result_value_list[idx] = objs[idx][0]
                 if config.app_to_cst_dict[idx] != 'None':
                     print("\t\tConstraint function value [by %s]:\t%.2f" % (config.app_to_cst_dict[idx], csts[idx][-1]))
 
             gantt.draw_gantt_chart()
+
+        return result_value_list
 
     def _pop_and_get_layer_info(self, q):
         _, l = q.pop()  # pop layer from _ready_queues
@@ -216,31 +222,32 @@ class SchedSimulator(object):
 
                 l, layer_idx, pe, app = self._pop_and_get_layer_info(q)
 
-                execution_time, transition_time = app.do_layer(l, pe, t)
+                execution_time, transition_time, transition_time_list = app.do_layer(l, pe, t)
                 end_time = t + execution_time
                 occupy_times[pe_idx] = end_time + transition_time
 
                 # Update iteration's end time
                 self._set_pe_time(pe, l.iteration, t, occupy_times[pe_idx])
-                # self._set_pe_time(pe, l.iteration, l.get_start_time(), occupy_times[pe_idx])
 
                 self.iteration[layer_idx] = self.iteration[layer_idx] + 1
                 self._update_timeline(l, occupy_times[pe_idx])
+
+                # XXX: Fix for Gantt chart bug (SqueezeNet transition time issue)
+                for time in transition_time_list:
+                    self._update_timeline(l, time)
+
                 l.increase_iter()
 
                 if l.iteration <= 1:
                     time_tuple = (pe, l, t, end_time, transition_time)
-                    # time_tuple = (pe, l, l.get_start_time(), end_time, transition_time)
                     sched.add_sched(time_tuple)
 
                 # FIXME What is second condition?
                 if draw_gantt and occupy_times[pe_idx] != t and l.iteration <= self.draw_iteration:
                     time_tuple = (l.get_name(), self.pe_list[pe].name, t, end_time, transition_time)
-                    # time_tuple = (l.get_name(), self.pe_list[pe].name, l.get_start_time(), end_time, transition_time)
                     gantt.add_task(time_tuple)
 
                 self.elapsed_time_per_pe[pe_idx] += (end_time - t)
-                # self.elapsed_time_per_pe[pe_idx] += (end_time - l.get_start_time())
 
                 if l.is_end_node and l.iteration == 1:
                     self.response_time[self.app_list.index(app)] = end_time
@@ -252,10 +259,11 @@ class SchedSimulator(object):
             if inc_sim_iteration:
                 sim_iteration += 1
 
+        result_value_list = None
         if draw_gantt:
-            self._draw_gantt(gantt, gantt_name, mapping, fitness)
+            result_value_list = self._draw_gantt(gantt, gantt_name, mapping, fitness)
 
-        return sched
+        return sched, result_value_list
 
     def get_response_time(self, app):
         return self.response_time[self.app_list.index(app)]

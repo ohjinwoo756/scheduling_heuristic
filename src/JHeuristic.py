@@ -186,9 +186,9 @@ class JHeuristic(MapFunc):
                 oeft = self.compute_oeft(highest_prio_layer, processor)
 
                 # XXX For scheduling of multiple apps
-                # if is_multiple:
-                # # if True:
-                #     oeft = oeft - self.get_penalty_by_erstwhile_mappings(highest_prio_layer, processor)
+                if is_multiple:
+                # if True:
+                    oeft = oeft - self.get_penalty_by_erstwhile_mappings(highest_prio_layer, processor)
 
                 if oeft < min_oeft: # XXX: processor selection phase
                     min_oeft_processor = processor
@@ -273,7 +273,7 @@ class JHeuristic(MapFunc):
 
 
     def get_penalty_by_erstwhile_mappings(self, target_layer, target_pe):
-        hyper_params = 0.2
+        hyper_params = 0.5
         penalty = self.current_vacancy_per_pe[target_pe.idx] * hyper_params
         self.current_vacancy_per_pe[target_pe.idx] = \
                 self.current_vacancy_per_pe[target_pe.idx] - target_layer.time_list[target_pe.idx]

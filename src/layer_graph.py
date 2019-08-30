@@ -267,9 +267,18 @@ class LayerGraph(DirectedGraph):
             exec_time = node.time_list[pe]
 
         transition_time = 0
+        transition_time_list = []
         for out_edge in self._out_edge[node]:
             transition_time += out_edge.calc_transition_time()
+	    # debug
+            # if node.name == "app_0 c2" or node.name == "app_0 c5" or node.name == "app_0 c8":
+            #     print "out_edge:", out_edge
+            #     print "%s\t\t%d" % (node.name, transition_time)
+            #     print "\t%s\t\t%d" % (out_edge.receiver.name, t + exec_time + transition_time)
             out_edge.receiver.set_start_time(t + exec_time + transition_time)
             out_edge.produce_data(t + exec_time + transition_time)
 
-        return exec_time, transition_time
+            # XXX: Fix for Gantt chart bug (SqueezeNet transition time issue)
+            transition_time_list.append(t + exec_time + transition_time)
+
+        return exec_time, transition_time, transition_time_list
