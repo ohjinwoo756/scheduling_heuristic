@@ -170,7 +170,7 @@ class SchedSimulator(object):
             for idx, app in enumerate(self.app_list):
                 print("\n\t[ %s (Period: %d, Priority: %d) ]" % (app.name, app.get_period(), app.get_priority()))
                 print("\t\tObjective function value [by %s]:\t%.2f" % (config.app_to_obj_dict[idx], objs[idx][0]))
-                result_value_list[idx] = objs[idx][0]
+                result_value_list[idx] = round(objs[idx][0], 2)
                 if config.app_to_cst_dict[idx] != 'None':
                     print("\t\tConstraint function value [by %s]:\t%.2f" % (config.app_to_cst_dict[idx], csts[idx][-1]))
 
@@ -230,11 +230,27 @@ class SchedSimulator(object):
                 self._set_pe_time(pe, l.iteration, t, occupy_times[pe_idx])
 
                 self.iteration[layer_idx] = self.iteration[layer_idx] + 1
-                self._update_timeline(l, occupy_times[pe_idx])
 
                 # XXX: Fix for Gantt chart bug (SqueezeNet transition time issue)
-                for time in transition_time_list:
-                    self._update_timeline(l, time)
+                # XXX: Option 4 chosen.
+                # 1. Original
+                # self._update_timeline(l, occupy_times[pe_idx])
+
+                # 2. was only possible in single app scheduling
+                # self._update_timeline(l, occupy_times[pe_idx])
+                # for time in transition_time_list:
+                #     self._update_timeline(l, time)
+
+                # 3. multiple app scheduling possible, but '[]' happens in transition_time_list
+                # for time in transition_time_list:
+                #     self._update_timeline(l, time)
+
+                # 4. Final implementation
+                if transition_time_list == []:
+                    self._update_timeline(l, occupy_times[pe_idx])
+                else:
+                    for time in transition_time_list:
+                        self._update_timeline(l, time)
 
                 l.increase_iter()
 

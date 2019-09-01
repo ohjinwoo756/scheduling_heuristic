@@ -341,6 +341,7 @@ if __name__ == '__main__':
     # for Gantt chart representation (not fitness calculation)
     sched_sim = SchedSimulator(app_list, pe_list)
     # draw gantt
+    gantt_chart_idx = 1
     for m in mappings:
         PE.init_apps_pe_by_mapping(app_list, m, pe_list)
         sched_sim.do_init()
@@ -350,19 +351,24 @@ if __name__ == '__main__':
             name += "_"
         objs = []
         csts = []
+
         for obj in mapper.fitness.objs:
             objs.append(type(obj).__name__)
         for cst in mapper.fitness.csts:
             csts.append(type(cst).__name__)
-        gantt_name = "{}_{}_{}_{}_{}_{}_{}.png".format(options.save_path + "/" + name, str(config.priority), str(config.period), str(options.cpu_core_distribution), str(objs), str(csts), config.analyzer)
 
-        _, result_value_list = sched_sim.do_simulation(m, (0, 5), True, gantt_name, mapper.fitness)
-
+        # XXX: No Gantt chart, just for getting result value
+        _, result_value_list = sched_sim.do_simulation(m, (0, 5), True, "dummy_gantt", mapper.fitness)
 
 	# XXX: Addition for easy arrangement of experiments
         if result_value_list != None:
             for idx in range(config.num_of_app):
                 result_by_app[idx].append(result_value_list[idx])
+
+        # XXX: Make final Gantt chart with name containing result values
+        gantt_name = "{}_{}_{}_{}_{}_{}_{}_{}_#{}.png".format(options.save_path + "/" + name, str(config.priority), str(config.period), str(options.cpu_core_distribution), str(objs), str(result_value_list), str(csts), config.analyzer, gantt_chart_idx)
+        sched_sim.do_simulation(m, (0, 5), True, gantt_name, mapper.fitness)
+        gantt_chart_idx = gantt_chart_idx + 1
 
     # XXX: Addition for easy arrangement of experiments
     print "\nObjective function value by each Application"
