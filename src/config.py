@@ -1,8 +1,3 @@
-### USER DEFINED ###
-# Set processors used in scheduling
-processor = ['cpu', 'gpu', 'npu']
-# processor = ['cpu', 'gpu']
-# processor = ['cpu']
 
 input_dir_path = "galaxyS9_affin_profile_final"
 # input_dir_path = "hikey970_profile"

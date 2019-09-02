@@ -70,6 +70,7 @@ class GA(MapFunc):
         if for_next_gene:
             self.cluster_pe = self.random.randint(0, self.num_pe - 1)
         else:
+            # XXX self.num_pe should be over 1
             self.cluster_pe = (self.random.randint(1, self.num_pe - 1) + self.cluster_pe) % self.num_pe
 
     def generate_processor(self):

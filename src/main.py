@@ -57,6 +57,7 @@ def copy_arg2config(args):
     config.num_virtual_cpu = len(config.cpu_config)
 
     total_cpu_core_num = 0
+    print config.cpu_config
     for cpu_pe in range(0, len(config.cpu_config)):
         core_num = int(config.cpu_config[cpu_pe])
         total_cpu_core_num += core_num
@@ -79,6 +80,7 @@ def copy_arg2config(args):
                     config.est_files.append(f)
 
     config.analyzer = args.analyzer
+    config.processor = args.processor
 
 
 def check_requirement(args, parser, required):
@@ -129,6 +131,7 @@ def parse_options():
     parser.add_argument("-o", "--objective", choices=config.app_to_obj_dict, nargs='+', dest="objective", help="Objective to apply. Valid choices are {}".format(config.app_to_obj_dict))
     parser.add_argument("-t", "--constraint", choices=config.app_to_cst_dict, nargs='+', dest="constraint", help="Constraint to apply. Valid choices are {}".format(config.app_to_cst_dict))
     parser.add_argument("-u", "--cpu_utilization", choices=config.CPU_util, dest="cpu_utilization", help="CPU utilization to apply. Valide choices are {}".format(config.CPU_util), default=100)
+    parser.add_argument("-r", "--processor", nargs='+', default=['cpu', 'gpu'], dest="processor", help="PE set to be scheduled.")
     parser.add_argument("--opt_energy", dest="opt_energy", default=False, action="store_true", help="Optimize energy.")
     parser.add_argument("-e", "--energy_cst", dest="energy_cst", default=0, help="Set energy constraint")
     parser.add_argument("-d", "--period", nargs='*', dest="period", help="Period to apply. The unit is micro-second(us)")
@@ -285,7 +288,7 @@ def init_processors():
 
     # FIXME there is assumption
     # pe type equal to pe name except cpu
-    for i, pe_type in enumerate(config.processor):
+    for _, pe_type in enumerate(config.processor):
         if 'cpu' in pe_type:
             continue
         pe_list.append(PE(pe_type))
@@ -366,8 +369,9 @@ if __name__ == '__main__':
                 result_by_app[idx].append(result_value_list[idx])
 
         # XXX: Make final Gantt chart with name containing result values
-        gantt_name = "{}_{}_{}_{}_{}_{}_{}_{}_#{}.png".format(options.save_path + "/" + name, str(config.priority), str(config.period), str(options.cpu_core_distribution), str(objs), str(result_value_list), str(csts), config.analyzer, gantt_chart_idx)
-        sched_sim.do_simulation(m, (0, 5), True, gantt_name, mapper.fitness)
+        sched_sim.do_init() # initialize
+        gantt_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_#{}.png".format(options.save_path + "/" + name, str(options.sched_method), str(config.processor), str(config.priority), str(config.period), str(options.cpu_core_distribution), str(objs), str(result_value_list), str(csts), config.analyzer, gantt_chart_idx)
+        _, _ = sched_sim.do_simulation(m, (0, 5), True, gantt_name, mapper.fitness)
         gantt_chart_idx = gantt_chart_idx + 1
 
     # XXX: Addition for easy arrangement of experiments
