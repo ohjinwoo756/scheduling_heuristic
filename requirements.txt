@@ -5,3 +5,4 @@ numpy
 sortedcontainers
 enum
 orderedset
+openpyxl

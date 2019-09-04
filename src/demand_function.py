@@ -21,7 +21,7 @@ class DemandFunction(object):
         idx = first_layer.get_index()
         sched_sim = SchedSimulator([app], pe_list)
         sched_sim.do_init()
-        self.sched, _ = sched_sim.do_simulation(mapping[idx:])  # response time of target app
+        self.sched = sched_sim.do_simulation(mapping[idx:])
         self.busy_time = []
         self.busy_exec = [0. for _ in pe_list]
         for idx, pe_time in enumerate(self.sched.busy_time):
