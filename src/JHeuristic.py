@@ -1,3 +1,4 @@
+
 from mapping_function import MapFunc
 from fitness import Fitness
 from pe import PEType
@@ -5,34 +6,52 @@ from collections import defaultdict
 from Layer import Layer
 import config
 
+
 class JHeuristic(MapFunc):
 
     def __init__(self, app_list, pe_list):
+        # about app
         self.app_list = app_list
         self.layer_list = [l for app in app_list for l in app.layer_list]
         self.pe_list = pe_list
         self.num_app = len(app_list)
         self.num_layer = len(self.layer_list)
         self.num_pe = len(pe_list)
-        self.fitness = Fitness(app_list, pe_list) # compute mapping's fitness
 
+        # about scheduling
         self.optimistic_cost_table = list()
-        self.optimistic_cost_hash = dict() # for speed up
-
+        # for speed up
+        self.optimistic_cost_hash = dict()
         self.processor_available_time_list = [0] * self.num_pe
         self.mapped_layers_per_pe = [[] for _ in range(self.num_pe)]
-        self.current_vacancy_per_pe = [0] * self.num_pe
+        self.fitness = Fitness(app_list, pe_list)
+        self.mappings = list()
+        self.target_range_divider = 5
+        # XXX: generate maximum 1+n (= initial + moving_coverate) mappings
+        self.moving_coverage = 2
 
 
     def do_schedule(self):
-        self.make_optimistic_cost_table()
-        self._do_schedule()
-        mappings = self.get_mappings()
+        self.apply_peft_to_each_app()
+        self.synthesize_pefts()
 
-        # debug
-        # self.print_mapped_layers_on_each_pe()
+        # XXX: mappings = [[mapping], [mapping], ...] # pareto result possible
+        return self.mappings
 
-        return mappings
+
+    def apply_peft_to_each_app(self):
+        self.make_optimistic_cost_table() # make OCT
+
+        for app_idx in range(0, len(self.app_list)):
+            self.peft_algorithm(self.app_list[app_idx])
+            self.init_prev_app_time_table() # for next independent PEFT
+
+        mapping = self._get_mapping()
+        self.mappings.append(mapping)
+
+
+    def init_prev_app_time_table(self):
+        self.processor_available_time_list = [0] * self.num_pe
 
 
     def make_optimistic_cost_table(self):
@@ -80,8 +99,8 @@ class JHeuristic(MapFunc):
                                     app.graph._edge[(task, successor)].calc_transition_time()
                         
                         # XXX: initialize temporal assignment
-                        self.initialize_temporal_assigned(task)
-                        self.initialize_temporal_assigned(successor)
+                        self.initialize_temporal_assigned(task, None)
+                        self.initialize_temporal_assigned(successor, None)
                         self.initialize_temporal_edge_type_between(task, successor)
 
                         if value < min_value:
@@ -95,7 +114,7 @@ class JHeuristic(MapFunc):
                 return optimistic_cost
 
 
-    # counterpart: initialize_temporal_assigned(self, layer)
+    # counterpart: initialize_temporal_assigned(self, layer, pe)
     def assign_temporal_processor(self, layer, pe):
         layer.set_pe(pe)
 
@@ -118,8 +137,8 @@ class JHeuristic(MapFunc):
                 task.app.graph._edge[(task, successor)].gpu_npu_connection = True
 
 
-    def initialize_temporal_assigned(self, layer):
-        layer.set_pe(None)
+    def initialize_temporal_assigned(self, layer, pe):
+        layer.set_pe(pe)
 
 
     def initialize_temporal_edge_type_between(self, task, successor):
@@ -139,21 +158,7 @@ class JHeuristic(MapFunc):
                 table_row_idx = table_row_idx + 1
 
 
-    def _do_schedule(self):
-        # XXX Algorithm
-        #   : Single app scheduling: PEFT
-        #   : Multiple apps scheduling: PEFT + modified PEFT
-        # Scheduling unit: appplication
-        for app_idx in range(0, len(self.app_list)):
-            if app_idx == 0:
-                self.peft_algorithm(self.app_list[app_idx])
-            else:
-                self.peft_algorithm(self.app_list[app_idx], True)
-
-
-    def peft_algorithm(self, target_app, is_multiple=False):
-        self.initialize_erstwhile_mappings(target_app) # XXX initialization
-
+    def peft_algorithm(self, target_app):
         ready_list = list()
         # put entry layer as an initial task
         ready_list.append(target_app.layer_list[0])
@@ -184,11 +189,6 @@ class JHeuristic(MapFunc):
 
             for processor in target_pe_list:
                 oeft = self.compute_oeft(highest_prio_layer, processor)
-
-                # XXX For scheduling of multiple apps
-                # if is_multiple:
-                if True:
-                    oeft = oeft - self.get_penalty_by_erstwhile_mappings(highest_prio_layer, processor)
 
                 if oeft < min_oeft: # XXX: processor selection phase
                     min_oeft_processor = processor
@@ -258,26 +258,10 @@ class JHeuristic(MapFunc):
                     max_sum_aft_comm = sum_aft_comm
 
                 # XXX: initialize temporal assignment
-                self.initialize_temporal_assigned(layer)
+                self.initialize_temporal_assigned(layer, None)
                 self.initialize_temporal_edge_type_between(prior, layer)
 
             return max(pe_available_time, max_sum_aft_comm)
-
-
-    def initialize_erstwhile_mappings(self, target_app):
-        self.current_vacancy_per_pe = [target_app.period] * self.num_pe
-        for pe_idx, layer_list in enumerate(self.mapped_layers_per_pe):
-            for layer in layer_list:
-                self.current_vacancy_per_pe[pe_idx] = \
-                        self.current_vacancy_per_pe[pe_idx] - layer.time_list[pe_idx]
-
-
-    def get_penalty_by_erstwhile_mappings(self, target_layer, target_pe):
-        penalty = self.current_vacancy_per_pe[target_pe.idx] * config.hyper_parameter
-        self.current_vacancy_per_pe[target_pe.idx] = \
-                self.current_vacancy_per_pe[target_pe.idx] - target_layer.time_list[target_pe.idx]
-
-        return penalty
 
 
     def update_layer_ready_list(self, target_layers, ready_list, layers_rank_oct):
@@ -338,26 +322,144 @@ class JHeuristic(MapFunc):
                     round(target_layer.time_list[min_oeft_processor.idx], 2)
 
 
-    def get_mappings(self):
-        # XXX: mappings = [[mapping], [mapping], ...] # pareto result possible
-        # XXX: But in JHeuristic, there is only one solution
-        mappings = [0] * len(self.layer_list)
+    def _get_mapping(self):
+        mapping = [0] * len(self.layer_list)
         idx = 0
         for app in self.app_list:
             for layer in app.layer_list:
-                mappings[idx] = layer.pe.get_idx()
+                mapping[idx] = layer.pe.get_idx()
                 idx = idx + 1
 
         # debug (response time in PEFT policy)
         # print "====================================================="
         # for app in self.app_list:
-        #     print app.name, app.layer_list[len(app.layer_list)-1].name, "| finish time:", app.layer_list[len(app.layer_list)-1].finish_time
-        # print "mapping: ", [mappings]
+        #     print app.name, app.layer_list[len(app.layer_list)-1].name, \
+        #             "| finish time:", app.layer_list[len(app.layer_list)-1].finish_time
+        # print "mapping: ", [mapping]
         # print "====================================================="
 
-        return [mappings]
+        return mapping
+
+
+    def synthesize_pefts(self):
+        if self.num_app == 1:
+            pass
+        else: # multiple apps
+            # XXX: movable_layers will have highest app's tasks
+            movable_layers = list() 
+            target_pe = self._get_max_occupied_exec_pe()
+            for layer in self.mapped_layers_per_pe[target_pe]:
+                if layer.app == self.app_list[0]:
+                    movable_layers.append(layer)
+
+            target_range = len(movable_layers) / self.target_range_divider
+            exec_time_matrix_by_pe_app = self._get_exec_time_matrix()
+
+            # XXX: generate n(= self.moving_coverage) mappings
+            for mc in range(self.moving_coverage):
+                target_layers, pe_to_move = self.get_pe_to_move(movable_layers, target_pe, target_range,\
+                        mc+1, exec_time_matrix_by_pe_app)
+
+                # temporal PE assignment to get mapping
+                original_pes = list()
+                for layer in target_layers:
+                    original_pes.append(layer.get_pe())
+                    self.assign_temporal_processor(layer, pe_to_move)
+
+                mapping = self._get_mapping()
+                self.mappings.append(mapping)
+
+                # back to original(= before synthesis) pe
+                for idx, layer in enumerate(target_layers):
+                    self.initialize_temporal_assigned(layer, original_pes[idx])
+
+
+    def _get_max_occupied_exec_pe(self):
+        occupied_exec_time_per_pe = [0] * self.num_pe
+        max_occupied_value = -float('inf')
+        max_occupied_pe = None
+
+        for pe_idx in range(0, self.num_pe):
+            for layer in self.mapped_layers_per_pe[pe_idx]:
+                # TODO: transition skipped (just leave it ?)
+                occupied_exec_time_per_pe[pe_idx] += layer.time_list[pe_idx]
+
+            if occupied_exec_time_per_pe[pe_idx] > max_occupied_value:
+                max_occupied_value = occupied_exec_time_per_pe[pe_idx]
+                max_occupied_pe = pe_idx
+
+        return max_occupied_pe
+
+
+    def _get_exec_time_matrix(self):
+        matrix = list()
+        for pe_idx in range(self.num_pe):
+            matrix.append(list())
+            for _ in range(self.num_app):
+                matrix[pe_idx].append(float(0))
+
+        for pe_idx in range(self.num_pe):
+            layers = self.mapped_layers_per_pe[pe_idx]
+            for layer in layers:
+                for app_idx, app in enumerate(self.app_list):
+                    if layer.app == app:
+                        matrix[pe_idx][app_idx] += layer.time_list[pe_idx]
+                        break
+
+        # debug
+        # for app_idx in range(self.num_app):
+        #     for pe_idx in range(self.num_pe):
+        #         print matrix[pe_idx][app_idx]
+
+        return matrix
+
+
+    def get_pe_to_move(self, movable_layers, target_pe, target_range, range_times, \
+                                                                    exec_time_matrix_by_pe_app):
+        _target_range = target_range * range_times
+        target_layers = movable_layers[-_target_range:] # XXX: from the end part
+        min_sum_of_interfere_and_slow = float('inf') # XXX
+
+        for pe_idx, pe in enumerate(self.pe_list):
+            interference = 0
+            slow_degree_of_pe = 0
+            if pe == target_pe:
+                continue
+            else:
+                for app_idx, app_exec_time in enumerate(exec_time_matrix_by_pe_app[pe_idx]):
+                    if app_idx == 0:
+                        continue
+                    else:
+                        interference += app_exec_time
+                for layer in target_layers:
+                    slow_degree_of_pe += layer.time_list[pe_idx]
+
+                if interference + slow_degree_of_pe < min_sum_of_interfere_and_slow:
+                    min_sum_of_interfere_and_slow = interference + slow_degree_of_pe
+                    pe_to_move = pe
+
+        return target_layers, pe_to_move
 
 
     def print_mapped_layers_on_each_pe(self):
         for i in range(self.num_pe):
             print self.mapped_layers_per_pe[i]
+
+
+    # deprecated
+    def initialize_erstwhile_mappings(self, target_app):
+        self.current_vacancy_per_pe = [target_app.period] * self.num_pe
+        for pe_idx, layer_list in enumerate(self.mapped_layers_per_pe):
+            for layer in layer_list:
+                self.current_vacancy_per_pe[pe_idx] = \
+                        self.current_vacancy_per_pe[pe_idx] - layer.time_list[pe_idx]
+
+
+    # deprecated
+    def get_penalty_by_erstwhile_mappings(self, target_layer, target_pe):
+        penalty = self.current_vacancy_per_pe[target_pe.idx] * config.hyper_parameter
+        self.current_vacancy_per_pe[target_pe.idx] = \
+                self.current_vacancy_per_pe[target_pe.idx] - target_layer.time_list[target_pe.idx]
+        return penalty
+
+
