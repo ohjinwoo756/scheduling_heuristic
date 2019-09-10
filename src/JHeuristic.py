@@ -29,6 +29,7 @@ class JHeuristic(MapFunc):
         self.target_range_divider = 5
         # XXX: generate maximum 1+n (= initial + moving_coverate) mappings
         self.moving_coverage = 2
+        self.interference_fortify = 5
 
 
     def do_schedule(self):
@@ -45,6 +46,16 @@ class JHeuristic(MapFunc):
         for app_idx in range(0, len(self.app_list)):
             self.peft_algorithm(self.app_list[app_idx])
             self.init_prev_app_time_table() # for next independent PEFT
+
+        # XXX: frontend, backend layer's PE distribution
+        cpu_pe_num = len(config.cpu_config)
+        cpu_pe_idx = 0
+        for app in self.app_list:
+            app.layer_list[0].set_pe(cpu_pe_idx)
+            app.layer_list[-1].set_pe(cpu_pe_idx)
+            cpu_pe_idx += 1
+            if cpu_pe_idx == cpu_pe_num:
+                break
 
         mapping = self._get_mapping()
         self.mappings.append(mapping)
@@ -434,6 +445,7 @@ class JHeuristic(MapFunc):
                 for layer in target_layers:
                     slow_degree_of_pe += layer.time_list[pe_idx]
 
+                interference = interference * interference_fortify
                 if interference + slow_degree_of_pe < min_sum_of_interfere_and_slow:
                     min_sum_of_interfere_and_slow = interference + slow_degree_of_pe
                     pe_to_move = pe
