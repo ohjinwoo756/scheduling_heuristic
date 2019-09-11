@@ -5,6 +5,7 @@ from collections import defaultdict
 from Layer import Layer
 import config
 
+
 class JHeuristic(MapFunc):
 
     def __init__(self, app_list, pe_list):
