@@ -188,8 +188,8 @@ class JHeuristic(MapFunc):
 
                 # XXX For scheduling of multiple apps
                 # if is_multiple:
-                if True:
-                    oeft = oeft - self.get_penalty_by_erstwhile_mappings(highest_prio_layer, processor)
+                #     oeft = oeft - self.get_penalty_by_erstwhile_mappings(highest_prio_layer, processor)
+                oeft = oeft - self.get_penalty_by_erstwhile_mappings(highest_prio_layer, processor)
 
                 if oeft < min_oeft: # XXX: processor selection phase
                     min_oeft_processor = processor
@@ -235,8 +235,14 @@ class JHeuristic(MapFunc):
 
     def compute_est(self, layer, processor):
         in_edges_list = list(layer.app.graph._in_edge[layer])
-        if in_edges_list == []: # If there is no preceding edge
-            return 0
+        # if in_edges_list == []: # If there is no preceding edge in highest-priority app
+        #     return 0
+        if in_edges_list == []: # If there is no preceding edge in highest-priority app
+            if layer.app.priority == 1:
+                return 0
+            else:
+                pe_available_time = self.processor_available_time_list[processor.idx]
+                return pe_available_time
         else:
             pe_available_time = self.processor_available_time_list[processor.idx]
 
@@ -265,8 +271,9 @@ class JHeuristic(MapFunc):
             return max(pe_available_time, max_sum_aft_comm)
 
 
+    # XXX: set 'current_vacancy_per_pe'
     def initialize_erstwhile_mappings(self, target_app):
-        self.current_vacancy_per_pe = [target_app.period] * self.num_pe
+        self.current_vacancy_per_pe = [target_app.period] * self.num_pe # FIXME: period can be different by app
         for pe_idx, layer_list in enumerate(self.mapped_layers_per_pe):
             for layer in layer_list:
                 self.current_vacancy_per_pe[pe_idx] = \
