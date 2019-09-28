@@ -92,7 +92,7 @@ class Layer(object):
 
         self.start_time = 0
         self.finish_time = None
-        self.pe_mapped = False
+        self.is_pe_mapped = False
 	self.rank_oct = None
 
     def set_offset(self, o):
@@ -208,11 +208,11 @@ class Layer(object):
     def get_finish_time(self):
         return self.finish_time
 
-    def set_pe_mapped(self, is_mapped):
-        self.pe_mapped = is_mapped
+    def set_is_pe_mapped(self, is_mapped):
+        self.is_pe_mapped = is_mapped
 
-    def get_pe_mapped(self):
-        return self.pe_mapped
+    def get_is_pe_mapped(self):
+        return self.is_pe_mapped
 
     def __str__(self):
         return '{:>10} ({:>3}) | {:>4} x {:>4} x {:>5} | {}'.format(self.name, str(self.priority), str(self.size[1]), str(self.size[0]), str(self.num_output), str(self.time_list))
