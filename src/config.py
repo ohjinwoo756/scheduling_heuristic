@@ -17,3 +17,5 @@ cfg_prototxt_path = []
 est_prototxt_path = []
 start_nodes_idx = []
 end_nodes_idx = []
+
+hyper_parameter = float(1)

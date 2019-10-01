@@ -19,20 +19,20 @@ class JHeuristic(MapFunc):
 
         self.optimistic_cost_table = list()
         self.optimistic_cost_hash = dict() # for speed up
-
-        self.processor_available_time_list = [0] * self.num_pe
-        self.mapped_layers_per_pe = [[] for _ in range(self.num_pe)]
+        self.progress_by_app = [0] * self.num_app
 
         # FIXME: deprecated
         self.current_vacancy_per_pe = [0] * self.num_pe
 
 
     def do_schedule(self):
-        self.calculate_oct_and_rank_oct()
-        self.scheduling_heuristic()
+        # self.original_heuristic_HtoL()
+        # self.original_heuristic_LtoH()
+        # self.original_heuristic_LtoH_iterative()
+        self.synthesis_heuristic() # TODO
+
         final_mappings = self.get_mappings()
         # self.print_mapped_layers_on_each_pe()
-
         return final_mappings
 
 
@@ -145,23 +145,99 @@ class JHeuristic(MapFunc):
                 table_row_idx = table_row_idx + 1
 
 
-    def scheduling_heuristic(self):
-        self.initialize_layers_finish_time_zero()
-        for app_idx in range(0, len(self.app_list)):
+    def original_heuristic_HtoL(self):
+        self.calculate_oct_and_rank_oct()
+        self.initialize_variables_for_peft()
+ 
+        for app_idx, app in enumerate(self.app_list):
             if app_idx == 0:
                 # XXX: original PEFT
-                self.peft_algorithm(self.app_list[app_idx], False)
+                # self.peft_algorithm(app, False)
+                self.peft_algorithm(app, len(app.layer_list), False)
             else:
                 # XXX: modified PEFT
-                self.peft_algorithm(self.app_list[app_idx], True)
-                # self.peft_algorithm(self.app_list[app_idx], False)
+                # self.peft_algorithm(app, True)
+                self.peft_algorithm(app, len(app.layer_list), True)
 
 
-    def peft_algorithm(self, target_app, is_modified=False):
+    def original_heuristic_LtoH(self):
+        self.calculate_oct_and_rank_oct()
+        self.initialize_variables_for_peft()
+
+        reversed_app_list = list(enumerate(self.app_list))
+        reversed_app_list.reverse()
+
+        for app_idx, app in reversed_app_list:
+            if app_idx == self.num_app-1:
+                # XXX: original PEFT
+                self.peft_algorithm(app, len(app.layer_list), False)
+            else:
+                # XXX: modified PEFT
+                self.peft_algorithm(app, len(app.layer_list), True)
+
+
+    def original_heuristic_LtoH_iterative(self):
+        self.calculate_oct_and_rank_oct()
+        self.initialize_variables_for_peft()
+
+        reversed_app_list = list(enumerate(self.app_list))
+        reversed_app_list.reverse()
+
+        divider = 10
+        coverage_by_app = [len(app.layer_list) / divider for app in self.app_list]
+        is_finished_by_app = [False] * self.num_app
+
+        while True:
+            for app_idx, app in reversed_app_list:
+                if not is_finished_by_app[app_idx]:
+                    # update coverage progress by each app
+                    if self.progress_by_app[app_idx] + coverage_by_app[app_idx] > len(app.layer_list):
+                        self.peft_algorithm(app, len(app.layer_list) - self.progress_by_app[app_idx], True)
+                    else:
+                        self.peft_algorithm(app, coverage_by_app[app_idx], True)
+
+                    if self.progress_by_app[app_idx] == len(app.layer_list):
+                        is_finished_by_app[app_idx] = True
+
+            is_while_finished = True
+            for app_idx, app in reversed_app_list:
+                if not is_finished_by_app[app_idx]:
+                    is_while_finished = False
+                    break
+
+            if is_while_finished:
+                break
+
+
+    def synthesis_heuristic(self):
+        # 1. apply PEFT to each application
+        self.calculate_oct_and_rank_oct()
+        for app_idx, app in enumerate(self.app_list):
+            self.initialize_variables_for_peft()
+            self.peft_algorithm(app, len(app.layer_list), False)
+
+        # 2. apply synthesis in case of multiple PEFTs
+        if self.num_app > 1:
+            self.synthesize_pefts()
+
+
+    def synthesize_pefts(self):
+        pass
+
+
+    def initialize_variables_for_peft(self):
+        for layer in self.layer_list:
+            layer.finish_time = 0
+        self.processor_available_time_list = [0] * self.num_pe
+        self.mapped_layers_per_pe = [[] for _ in range(self.num_pe)]
+
+
+    # XXX: target_app.layer_list[self.progress_by_app[target_app.priority-1] : coverage] will be processed
+    def peft_algorithm(self, target_app, coverage, is_modified=False):
         # FIXME: deprecated
-        # self._update_vacancy_with_erstwhile_mappings(target_app)
+        self._update_vacancy_with_erstwhile_mappings(target_app)
 
-        highest_rank_oct_layers, layers_rank_oct, ready_list = self._init_variables(target_app)
+        highest_rank_oct_layers, layers_rank_oct, ready_list = self._init_variables(target_app, coverage)
 
         while ready_list != []:
             # TASK PRIORITIZATION PHASE 
@@ -181,8 +257,9 @@ class JHeuristic(MapFunc):
                 if is_modified:
                     # oeft -= self._get_vacancy_by_erstwhile_mappings(highest_rank_oct_layer, processor) # FIXME: deprecated
                     oeft += self.get_interference_from_pe(target_app, processor, occupation_matrix)
-                    oeft += self.get_slow_degree_of_pe(highest_rank_oct_layer, processor)
-                if oeft < min_oeft: # XXX: processor selection phase
+                    # oeft += self.get_slow_degree_of_pe(highest_rank_oct_layer, processor)
+                    pass
+                if oeft < min_oeft:
                     min_oeft_processor = processor
                     min_oeft = oeft
 
@@ -197,19 +274,25 @@ class JHeuristic(MapFunc):
             self.update_ready_list_and_highest_rank_oct_layers(ready_list, layers_rank_oct, highest_rank_oct_layers)
 
 
-    def _init_variables(self, target_app):
+    def _init_variables(self, target_app, coverage):
         # init highest_rank_oct_layers, layers_rank_oct
         highest_rank_oct_layers = list()
         layers_rank_oct = dict()
-        for layer in target_app.layer_list:
+
+        start_point = self.progress_by_app[target_app.priority-1]
+        coveraged_layer_list = target_app.layer_list[start_point:start_point+coverage]
+
+        for layer in coveraged_layer_list:
             highest_rank_oct_layers.append(layer)
             layers_rank_oct[layer] = layer.get_rank_oct()
 
         # init ready_list
         # XXX: insert to ready_list, then extract from highest_rank_oct_layers
         ready_list = list()
-        ready_list.append(target_app.layer_list[0])
-        highest_rank_oct_layers.remove(target_app.layer_list[0])
+        ready_list.append(coveraged_layer_list[0])
+        highest_rank_oct_layers.remove(coveraged_layer_list[0])
+
+        self.progress_by_app[target_app.priority-1] += coverage
 
         return highest_rank_oct_layers, layers_rank_oct, ready_list
 
@@ -287,15 +370,14 @@ class JHeuristic(MapFunc):
             elif target_app.priority == app_priority:
                 continue
 
-        # result = higher_interference * higher_interference_hyper_param + \
-        #         lower_interference * lower_interference_hyper_param
-        result = higher_interference * higher_interference_hyper_param
+        result = higher_interference * higher_interference_hyper_param + \
+                lower_interference * lower_interference_hyper_param
 
         return result
 
 
     def get_slow_degree_of_pe(self, highest_rank_oct_layer, target_pe):
-        slow_degree_hyper_param = 1
+        slow_degree_hyper_param = 5
         result = highest_rank_oct_layer.time_list[target_pe.idx] * slow_degree_hyper_param
         return result
 
@@ -378,11 +460,6 @@ class JHeuristic(MapFunc):
         prior = prior_edge.sender
         self.processor_available_time_list[prior.pe.get_idx()] += prior_edge.calc_transition_time()
         prior.finish_time = self.processor_available_time_list[prior.pe.get_idx()]
-
-
-    def initialize_layers_finish_time_zero(self):
-        for layer in self.layer_list:
-            layer.finish_time = 0
 
 
     def get_mappings(self):

@@ -87,10 +87,10 @@ def copy_arg2config(args):
 
     config.analyzer = args.analyzer
     config.processor = args.processor
-    if args.hyper_parameter != None:
-        config.hyper_parameter = float(args.hyper_parameter)
-    else:
-        config.hyper_parameter = None
+    # if args.hyper_parameter != None:
+    #     config.hyper_parameter = float(args.hyper_parameter)
+    # else:
+    #     config.hyper_parameter = None
 
 
 def parse_result_path(args):
@@ -181,7 +181,7 @@ def parse_options():
     parser.add_argument("-a", "--analyzer", dest="analyzer", default="mobility", help="set analyzer")
     parser.add_argument("-r", "--processor", nargs='+', default=['cpu', 'gpu', 'npu'], dest="processor", help="PE set to be scheduled.")
     # XXX: only for JHeuristic
-    parser.add_argument("-y", "--hyper_parameter", default=None, dest="hyper_parameter", help="Set hyper parameter in JHeuristic.")
+    # parser.add_argument("-y", "--hyper_parameter", default=None, dest="hyper_parameter", help="Set hyper parameter in JHeuristic.")
 
     args = parser.parse_args()
     check_requirement(args, parser, required)
