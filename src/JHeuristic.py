@@ -159,6 +159,10 @@ class JHeuristic(MapFunc):
                 # self.peft_algorithm(app, True)
                 self.peft_algorithm(app, len(app.layer_list), True)
 
+        self.fitness.calculate_fitness(self.get_mappings()[0])
+        for layer in self.layer_list:
+            print layer.mobility
+
 
     def original_heuristic_LtoH(self):
         self.calculate_oct_and_rank_oct()
@@ -174,6 +178,10 @@ class JHeuristic(MapFunc):
             else:
                 # XXX: modified PEFT
                 self.peft_algorithm(app, len(app.layer_list), True)
+
+        self.fitness.calculate_fitness(self.get_mappings()[0])
+        for layer in self.layer_list:
+            print layer.mobility
 
 
     def original_heuristic_LtoH_iterative(self):
@@ -208,6 +216,10 @@ class JHeuristic(MapFunc):
             if is_while_finished:
                 break
 
+        self.fitness.calculate_fitness(self.get_mappings()[0])
+        for layer in self.layer_list:
+            print "app(%s): layer(%s): mobility = %.2f" % (layer.app.name, layer.name, layer.mobility)
+
 
     def synthesis_heuristic(self):
         # 1. apply PEFT to each application
@@ -219,6 +231,10 @@ class JHeuristic(MapFunc):
         # 2. apply synthesis in case of multiple PEFTs
         if self.num_app > 1:
             self.synthesize_pefts()
+
+        self.fitness.calculate_fitness(self.get_mappings()[0])
+        for layer in self.layer_list:
+            print "app(%s): layer(%s): mobility = %.2f" % (layer.app.name, layer.name, layer.mobility)
 
 
     def synthesize_pefts(self):
@@ -471,11 +487,11 @@ class JHeuristic(MapFunc):
                 mappings[idx] = layer.pe.get_idx()
                 idx = idx + 1
 
-        print "====================================================="
-        for app in self.app_list:
-            print app.name, app.layer_list[len(app.layer_list)-1].name, "| finish time:", app.layer_list[len(app.layer_list)-1].finish_time
-        print "mapping: ", [mappings]
-        print "====================================================="
+        # print "====================================================="
+        # for app in self.app_list:
+        #     print app.name, app.layer_list[len(app.layer_list)-1].name, "| finish time:", app.layer_list[len(app.layer_list)-1].finish_time
+        # print "mapping: ", [mappings]
+        # print "====================================================="
 
         return [mappings]
 
