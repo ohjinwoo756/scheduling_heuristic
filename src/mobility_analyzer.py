@@ -2,7 +2,7 @@ from analyzer import Analyzer
 import config
 from sched_simulator import SchedSimulator
 from layer_graph import DirectedGraph
-from demand_function import DemandFunction
+from demand_function import DemandFunctionMobility, DemandFunctionRT
 
 
 class MobilityAnalyzer(Analyzer):
@@ -27,7 +27,6 @@ class MobilityAnalyzer(Analyzer):
         self.pe_list = pe_list
         self.pe2layer = [[] for _ in pe_list]
         self.sched_sim = SchedSimulator([app], pe_list)
-        self._max_mobility = app.get_period()
         self.is_init = True
 
     def _update_mobility(self):
@@ -38,14 +37,13 @@ class MobilityAnalyzer(Analyzer):
                 for a in self.app_list:
                     if a is app:
                         break
-                    # XXX: 2-1. demand += higher priority max demand
-                    demand += self.dbf[a].get_max_demand(pe, self._max_mobility + t.time_list[pe])
+                    # demand += self.dbf[a].get_max_demand(pe, app.get_period())
+                    demand += self.dbf[a].get_max_demand(pe, t.mobility + t.time_list[pe])
 
                 if demand == 0.:
                     continue
 
-            # print("PE {}] Period {:.2f}\tMax_Mobility {:.2f}\tDemand {:.2f}".format(pe, app.get_period(), self._max_mobility, demand))
-                # XXX: 2-2. update demand to layer's mobility
+                # print("PE {}] Period {:.2f}\tDemand {:.2f}".format(pe, app.get_period(), demand))
                 t.set_mobility(t.mobility - demand)
                 # print("\t-> {t.name:>12s}\tmobility {t.mobility:.2f}".format(t=t))
 
@@ -70,10 +68,9 @@ class MobilityAnalyzer(Analyzer):
             self._update_mobility()
 
         pe = self.mapping[last_layer.get_index()]
-        _, lp_max_exec = self._get_lp_max_exec(pe, app.get_priority())
 
         # print("Name {app.name:>12s}\tPeriod {app.period:.2f}\tMobility {mobility:.2f} lp max_exec {lp_max_exec:.2f}".format(app=app, mobility=last_layer.mobility, lp_max_exec=lp_max_exec))
-        return app.get_period() - (last_layer.mobility - lp_max_exec)
+        return app.get_period() - (last_layer.mobility - self.pe2max_low_inter[pe])
 
     def _get_lp_max_exec(self, pe, prio):
         lp_max_exec = 0.
@@ -94,17 +91,12 @@ class MobilityAnalyzer(Analyzer):
         app = self.app
         last_layer = app.layer_list[-1]
         if app.get_priority() != 1:
-            # XXX: 2. update mobility for each layer
-            # cover effect from higher priority
             self._update_mobility()
 
         pe = self.mapping[last_layer.get_index()]
-        _, lp_max_exec = self._get_lp_max_exec(pe, app.get_priority())
 
-        # XXX: 3. cover effect from lower priority
-        return 1024 * max(-(last_layer.mobility - lp_max_exec), 0)
+        return 1024 * max(-(last_layer.mobility - self.pe2max_low_inter[pe]), 0)
 
-    # XXX: 1. set initial mobility for each layer
     def preprocess(self, mapping):
         app = self.app
         first_layer = app.layer_list[0]
@@ -112,22 +104,28 @@ class MobilityAnalyzer(Analyzer):
         self.mapping = mapping
         self.dbf = {}
         for a in self.app_list:
-            if a is app: # only higher priority
+            if a is app:
                 break
-            # XXX: DBF calculation only covers apps with higher priority
-            self.dbf[a] = DemandFunction(a, mapping, self.pe_list)
+            self.dbf[a] = DemandFunctionMobility(self.app_list, a, mapping, self.pe_list)
+            # self.dbf[a] = DemandFunctionRT(a, mapping, self.pe_list)
 
         self.sched_sim.do_init()
         self.sched_sim.do_simulation(mapping[idx:])  # response time of target app
         response_time = self.sched_sim.get_response_time(app)
-        self.pe2layer = [[] for _ in self.pe_list]
-        for layer in app.layer_list:
-	    # XXX: used when drawing gantt chart
-            self._max_mobility = max(first_layer.get_period() - response_time, 0)
-            layer.set_mobility(first_layer.get_period() - response_time)
+        self.max_mobility = first_layer.get_period() - response_time
 
-            # XXX: self.pe2layer has preprocessed layers
-            self.pe2layer[mapping[layer.get_index()]].append(layer)
+        self.pe2max_low_inter = []
+        for pe, _ in enumerate(self.pe_list):
+            _, lp_max_exec = self._get_lp_max_exec(pe, app.get_priority())
+            self.pe2max_low_inter.append(lp_max_exec)
+
+        self.pe2layer = [[] for _ in self.pe_list]
+        for layer in reversed(app.layer_list):
+            pe = mapping[layer.get_index()]
+            self.pe2layer[pe].append(layer)
+
+            mobility = self.max_mobility
+            layer.set_mobility(mobility)
 
     def get_violated_layer(self):
         app = self.app
@@ -163,3 +161,4 @@ class MobilityAnalyzer(Analyzer):
                         hp_max = l
 
         return violated_layer, [hp_max, lp_max]
+
