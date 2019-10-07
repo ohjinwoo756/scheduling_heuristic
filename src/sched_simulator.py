@@ -50,7 +50,7 @@ class SchedSimulator(object):
         self.num_layer = len(self.layer_list)
         self.throughput_thresh = 100
 
-        self.draw_iteration = 2
+        self.draw_iteration = 1
 
         self.num_pe = len(pe_list)
 
@@ -150,6 +150,7 @@ class SchedSimulator(object):
             if value[0] != 0:
                 available_results = False
                 break
+        config.available_results = available_results
 
         if available_results:
             print("\nPE Mapping per layer: " + str(mapping))
@@ -166,12 +167,17 @@ class SchedSimulator(object):
                 if idx >= config.num_of_app:
                     print("\t\tConstraint function value [by %s] :\t %.2f -> %.2f" % (type(cst).__name__, value[-1], value[0]))
 
+            objs_result = []
             for idx, app in enumerate(self.app_list):
                 print("\n\t[ %s (Period: %d, Priority: %d) ]" % (app.name, app.get_period(), app.get_priority()))
                 print("\t\tObjective function value [by %s]:\t%.2f" % (config.app_to_obj_dict[idx], objs[idx][0]))
                 if config.app_to_cst_dict[idx] != 'None':
                     print("\t\tConstraint function value [by %s]:\t%.2f" % (config.app_to_cst_dict[idx], csts[idx][-1]))
+                config.objs_result_by_app[idx].append(round(objs[idx][0], 2))
+                objs_result.append(round(objs[idx][0], 2))
 
+            config.file_name = "{}{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(config.save_path + "/" + config.name, str(config.sched_method), str(config.hyper_parameter), str(config.processor), str(config.priority), str(config.period), str(config.cpu_config), str(config.objs), str(objs_result), str(config.csts), config.analyzer)
+            gantt.file_name = config.file_name + "#{}.png".format(config.gantt_chart_idx)
             gantt.draw_gantt_chart()
 
     def _pop_and_get_layer_info(self, q):
@@ -218,7 +224,7 @@ class SchedSimulator(object):
 
                 l, layer_idx, pe, app = self._pop_and_get_layer_info(q)
 
-                execution_time, transition_time = app.do_layer(l, pe, t)
+                execution_time, transition_time, transition_time_list = app.do_layer(l, pe, t)
                 end_time = t + execution_time
                 occupy_times[pe_idx] = end_time + transition_time
 
@@ -226,7 +232,14 @@ class SchedSimulator(object):
                 self._set_pe_time(pe, l.iteration, t, occupy_times[pe_idx])
 
                 self.iteration[layer_idx] = self.iteration[layer_idx] + 1
-                self._update_timeline(l, occupy_times[pe_idx])
+
+                # self._update_timeline(l, occupy_times[pe_idx])
+                if transition_time_list == []:
+                    self._update_timeline(l, occupy_times[pe_idx])
+                else:
+                    for time in transition_time_list:
+                        self._update_timeline(l, time)
+
                 l.increase_iter()
 
                 if l.iteration <= 1:
