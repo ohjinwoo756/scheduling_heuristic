@@ -33,6 +33,22 @@ class JHeuristic(MapFunc):
         return final_mappings
 
 
+    def synthetic_heuristic(self):
+        # 1. apply PEFT to each application
+        self.calculate_oct_and_rank_oct()
+        for app_idx, app in enumerate(self.app_list):
+            self.initialize_variables_for_peft()
+            self.peft_algorithm(app, len(app.layer_list), False)
+
+        # 2. In case of multiple PEFTs, 
+        if self.num_app > 1:
+            self.rank_processors()
+            self.initial_synthesis()
+            self.reconfigure_synthesis()
+
+        self.fitness.calculate_fitness(self.get_mappings()[0])
+
+
     def calculate_oct_and_rank_oct(self):
         for app in self.app_list:
             for layer in app.layer_list:
@@ -132,54 +148,6 @@ class JHeuristic(MapFunc):
         task.app.graph._edge[(task, successor)].cpu2npu = False 
         task.app.graph._edge[(task, successor)].npu2cpu = False 
         task.app.graph._edge[(task, successor)].gpu_npu_connection = False
-
-
-    def print_optimistic_cost_table(self):
-        table_row_idx = 0
-        for app in self.app_list:
-            for layer in app.layer_list:
-                print self.optimistic_cost_table[table_row_idx]
-                table_row_idx = table_row_idx + 1
-
-
-    def synthetic_heuristic(self):
-        # 1. apply PEFT to each application
-        self.calculate_oct_and_rank_oct()
-        for app_idx, app in enumerate(self.app_list):
-            self.initialize_variables_for_peft()
-            self.peft_algorithm(app, len(app.layer_list), False)
-
-        # 2. In case of multiple PEFTs, 
-        if self.num_app > 1:
-            self.rank_processors()
-            self.synthesize_pefts()
-            self.reconfigure_mappings()
-
-        self.fitness.calculate_fitness(self.get_mappings()[0])
-
-
-    def rank_processors(self):
-        sample_app = self.app_list[0]
-        dict_pe_to_sum = dict()
-
-        # get sum of layer's execution time for each PE
-        for p_idx, p in enumerate(self.pe_list):
-            exec_sum = 0
-            for l in sample_app.layer_list:
-                if not l.is_start_node and not l.is_end_node:
-                    exec_sum += l.time_list[p_idx]
-            dict_pe_to_sum[p_idx] = exec_sum
-
-        # sorted upward by sum
-	self.rank_of_pe = sorted(dict_pe_to_sum, key=lambda k : dict_pe_to_sum[k])
-
-
-    def synthesize_pefts(self):
-        pass
-
-
-    def reconfigure_mappings(self):
-        pass
 
 
     def initialize_variables_for_peft(self):
@@ -287,6 +255,44 @@ class JHeuristic(MapFunc):
                 self.initialize_edge_type_between(prior, layer)
 
         return max(pe_available_time, max_sum_aft_comm)
+
+
+    def rank_processors(self):
+        sample_app = self.app_list[0]
+        dict_pe_to_sum = dict()
+
+        # get sum of layer's execution time for each PE
+        for p_idx, p in enumerate(self.pe_list):
+            exec_sum = 0
+            for l in sample_app.layer_list:
+                if not l.is_start_node and not l.is_end_node:
+                    exec_sum += l.time_list[p_idx]
+            dict_pe_to_sum[p_idx] = exec_sum
+
+        # sorted upward by sum
+        # XXX: index = rank, content = processor's index
+	self.rank_of_pe = sorted(dict_pe_to_sum, key=lambda k : dict_pe_to_sum[k])
+
+
+    def initial_synthesis(self):
+        max_parallel_per_layer = []
+        for a_idx, a in enumerate(self.app_list):
+            for l_idx , l in enumerate(a.layer_list):
+                max_parallel = 0
+                out_edges = l.app.graph._out_edge[l]
+                if len(out_edges) >= 2: # if parallel structure
+                    mapped = []
+                    for e in out_edges:
+                        rp = e.receiver.get_pe()
+                        if rp not in mapped:
+                            mapped.append(rp)
+                            print mapped
+                            max_parallel += 1
+                max_parallel_per_layer.append(max_parallel)
+
+
+    def reconfigure_synthesis(self):
+        pass
 
 
     def get_interference_from_pe(self, target_app, target_pe, occupation_matrix):
@@ -411,4 +417,12 @@ class JHeuristic(MapFunc):
     def print_mapped_layers_on_each_pe(self):
         for i in range(self.num_pe):
             print self.mapped_layers_per_pe[i]
+
+
+    def print_optimistic_cost_table(self):
+        table_row_idx = 0
+        for app in self.app_list:
+            for layer in app.layer_list:
+                print self.optimistic_cost_table[table_row_idx]
+                table_row_idx = table_row_idx + 1
 
