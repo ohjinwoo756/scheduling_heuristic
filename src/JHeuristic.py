@@ -1,3 +1,4 @@
+
 from mapping_function import MapFunc
 from fitness import Fitness
 from pe import PEType
@@ -21,15 +22,9 @@ class JHeuristic(MapFunc):
         self.optimistic_cost_hash = dict() # for speed up
         self.progress_by_app = [0] * self.num_app
 
-        # FIXME: deprecated
-        self.current_vacancy_per_pe = [0] * self.num_pe
-
 
     def do_schedule(self):
-        # self.original_heuristic_HtoL()
-        # self.original_heuristic_LtoH()
-        # self.original_heuristic_LtoH_iterative()
-        self.synthesis_heuristic() # TODO
+        self.synthetic_heuristic()
 
         final_mappings = self.get_mappings()
         # self.print_mapped_layers_on_each_pe()
@@ -145,91 +140,30 @@ class JHeuristic(MapFunc):
                 table_row_idx = table_row_idx + 1
 
 
-    def original_heuristic_HtoL(self):
-        self.calculate_oct_and_rank_oct()
-        self.initialize_variables_for_peft()
- 
-        for app_idx, app in enumerate(self.app_list):
-            if app_idx == 0:
-                # XXX: original PEFT
-                # self.peft_algorithm(app, False)
-                self.peft_algorithm(app, len(app.layer_list), False)
-            else:
-                # XXX: modified PEFT
-                # self.peft_algorithm(app, True)
-                self.peft_algorithm(app, len(app.layer_list), True)
-
-        self.fitness.calculate_fitness(self.get_mappings()[0])
-
-
-    def original_heuristic_LtoH(self):
-        self.calculate_oct_and_rank_oct()
-        self.initialize_variables_for_peft()
-
-        reversed_app_list = list(enumerate(self.app_list))
-        reversed_app_list.reverse()
-
-        for app_idx, app in reversed_app_list:
-            if app_idx == self.num_app-1:
-                # XXX: original PEFT
-                self.peft_algorithm(app, len(app.layer_list), False)
-            else:
-                # XXX: modified PEFT
-                self.peft_algorithm(app, len(app.layer_list), True)
-
-        self.fitness.calculate_fitness(self.get_mappings()[0])
-
-
-    def original_heuristic_LtoH_iterative(self):
-        self.calculate_oct_and_rank_oct()
-        self.initialize_variables_for_peft()
-
-        reversed_app_list = list(enumerate(self.app_list))
-        reversed_app_list.reverse()
-
-        divider = 10
-        coverage_by_app = [len(app.layer_list) / divider for app in self.app_list]
-        is_finished_by_app = [False] * self.num_app
-
-        while True:
-            for app_idx, app in reversed_app_list:
-                if not is_finished_by_app[app_idx]:
-                    # update coverage progress by each app
-                    if self.progress_by_app[app_idx] + coverage_by_app[app_idx] > len(app.layer_list):
-                        self.peft_algorithm(app, len(app.layer_list) - self.progress_by_app[app_idx], True)
-                    else:
-                        self.peft_algorithm(app, coverage_by_app[app_idx], True)
-
-                    if self.progress_by_app[app_idx] == len(app.layer_list):
-                        is_finished_by_app[app_idx] = True
-
-            is_while_finished = True
-            for app_idx, app in reversed_app_list:
-                if not is_finished_by_app[app_idx]:
-                    is_while_finished = False
-                    break
-
-            if is_while_finished:
-                break
-
-        self.fitness.calculate_fitness(self.get_mappings()[0])
-
-
-    def synthesis_heuristic(self):
+    # XXX TODO
+    def synthetic_heuristic(self):
         # 1. apply PEFT to each application
         self.calculate_oct_and_rank_oct()
         for app_idx, app in enumerate(self.app_list):
             self.initialize_variables_for_peft()
             self.peft_algorithm(app, len(app.layer_list), False)
 
-        # 2. apply synthesis in case of multiple PEFTs
+        # 2. In case of multiple PEFTs, 
         if self.num_app > 1:
+            self.rank_processors()
             self.synthesize_pefts()
+            self.reconfigure_mappings()
 
         self.fitness.calculate_fitness(self.get_mappings()[0])
 
 
+    def rank_processors(self):
+        pass
+
     def synthesize_pefts(self):
+        pass
+
+    def reconfigure_mappings(self):
         pass
 
 
@@ -242,9 +176,6 @@ class JHeuristic(MapFunc):
 
     # XXX: target_app.layer_list[self.progress_by_app[target_app.priority-1] : coverage] will be processed
     def peft_algorithm(self, target_app, coverage, is_modified=False):
-        # FIXME: deprecated
-        self._update_vacancy_with_erstwhile_mappings(target_app)
-
         highest_rank_oct_layers, layers_rank_oct, ready_list = self._init_variables(target_app, coverage)
 
         while ready_list != []:
@@ -263,10 +194,8 @@ class JHeuristic(MapFunc):
             for processor in target_pe_list:
                 oeft = self.compute_oeft(highest_rank_oct_layer, processor)
                 if is_modified:
-                    # oeft -= self._get_vacancy_by_erstwhile_mappings(highest_rank_oct_layer, processor) # FIXME: deprecated
                     oeft += self.get_interference_from_pe(target_app, processor, occupation_matrix)
-                    # oeft += self.get_slow_degree_of_pe(highest_rank_oct_layer, processor)
-                    pass
+
                 if oeft < min_oeft:
                     min_oeft_processor = processor
                     min_oeft = oeft
@@ -345,24 +274,6 @@ class JHeuristic(MapFunc):
         return max(pe_available_time, max_sum_aft_comm)
 
 
-    # FIXME: deprecated. Term 'vacancy' may not be used.
-    def _update_vacancy_with_erstwhile_mappings(self, target_app):
-        self.current_vacancy_per_pe = [target_app.period] * self.num_pe # FIXME: period can be different by app
-        for pe_idx, layer_list in enumerate(self.mapped_layers_per_pe):
-            for layer in layer_list:
-                self.current_vacancy_per_pe[pe_idx] = \
-                        self.current_vacancy_per_pe[pe_idx] - layer.time_list[pe_idx]
-
-
-    # FIXME: deprecated. Term 'vacancy' may not be used.
-    def _get_vacancy_by_erstwhile_mappings(self, highest_rank_oct_layer, target_pe):
-        penalty = self.current_vacancy_per_pe[target_pe.idx] * config.hyper_parameter
-        self.current_vacancy_per_pe[target_pe.idx] = \
-                self.current_vacancy_per_pe[target_pe.idx] - highest_rank_oct_layer.time_list[target_pe.idx]
-
-        return penalty
-
-
     def get_interference_from_pe(self, target_app, target_pe, occupation_matrix):
         higher_interference = float(0)
         lower_interference = float(0)
@@ -381,12 +292,6 @@ class JHeuristic(MapFunc):
         result = higher_interference * higher_interference_hyper_param + \
                 lower_interference * lower_interference_hyper_param
 
-        return result
-
-
-    def get_slow_degree_of_pe(self, highest_rank_oct_layer, target_pe):
-        slow_degree_hyper_param = 5
-        result = highest_rank_oct_layer.time_list[target_pe.idx] * slow_degree_hyper_param
         return result
 
 
@@ -491,5 +396,4 @@ class JHeuristic(MapFunc):
     def print_mapped_layers_on_each_pe(self):
         for i in range(self.num_pe):
             print self.mapped_layers_per_pe[i]
-
 
