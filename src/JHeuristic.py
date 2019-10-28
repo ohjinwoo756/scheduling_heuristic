@@ -22,6 +22,8 @@ class JHeuristic(MapFunc):
         self.optimistic_cost_hash = dict() # for speed up
         self.progress_by_app = [0] * self.num_app
 
+        self.rank_of_pe = None
+
 
     def do_schedule(self):
         self.synthetic_heuristic()
@@ -140,7 +142,6 @@ class JHeuristic(MapFunc):
                 table_row_idx = table_row_idx + 1
 
 
-    # XXX TODO
     def synthetic_heuristic(self):
         # 1. apply PEFT to each application
         self.calculate_oct_and_rank_oct()
@@ -158,10 +159,24 @@ class JHeuristic(MapFunc):
 
 
     def rank_processors(self):
-        pass
+        sample_app = self.app_list[0]
+        dict_pe_to_sum = dict()
+
+        # get sum of layer's execution time for each PE
+        for p_idx, p in enumerate(self.pe_list):
+            exec_sum = 0
+            for l in sample_app.layer_list:
+                if not l.is_start_node and not l.is_end_node:
+                    exec_sum += l.time_list[p_idx]
+            dict_pe_to_sum[p_idx] = exec_sum
+
+        # sorted upward by sum
+	self.rank_of_pe = sorted(dict_pe_to_sum, key=lambda k : dict_pe_to_sum[k])
+
 
     def synthesize_pefts(self):
         pass
+
 
     def reconfigure_mappings(self):
         pass
