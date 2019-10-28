@@ -275,20 +275,34 @@ class JHeuristic(MapFunc):
 
 
     def initial_synthesis(self):
-        max_parallel_per_layer = []
         for a_idx, a in enumerate(self.app_list):
-            for l_idx , l in enumerate(a.layer_list):
-                max_parallel = 0
-                out_edges = l.app.graph._out_edge[l]
-                if len(out_edges) >= 2: # if parallel structure
-                    mapped = []
-                    for e in out_edges:
-                        rp = e.receiver.get_pe()
-                        if rp not in mapped:
-                            mapped.append(rp)
-                            print mapped
-                            max_parallel += 1
-                max_parallel_per_layer.append(max_parallel)
+            max_parallel = self.get_max_parallelism_of(a)
+            if max_parallel >= self.num_pe:
+                shrink_parallelism(a)
+
+
+    def get_max_parallelism_of(self, app):
+        max_parallel_of_app = 1
+        for l_idx , l in enumerate(app.layer_list):
+            max_parallel = 0
+            out_edges = l.app.graph._out_edge[l]
+            if len(out_edges) >= 2: # if parallel structure
+                mapped = []
+                for e in out_edges:
+                    rp = e.receiver.get_pe()
+                    if rp not in mapped:
+                        mapped.append(rp)
+                        max_parallel += 1
+            if max_parallel > max_parallel_of_app:
+                max_parallel_of_app = max_parallel
+
+        return max_parallel_of_app
+
+
+    def shrink_parallelism(self, app):
+        for l_idx, l in enumerate(app.layer_list):
+            if l.get_pe() == self.rank_of_pe[-1]:
+                l.set_pe(self.rank_of_pe[0])
 
 
     def reconfigure_synthesis(self):
