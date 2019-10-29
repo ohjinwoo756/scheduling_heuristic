@@ -4,6 +4,7 @@ from fitness import Fitness
 from pe import PEType
 from collections import defaultdict
 from Layer import Layer
+from sched_simulator import SchedSimulator
 import config
 
 
@@ -23,30 +24,31 @@ class JHeuristic(MapFunc):
         self.progress_by_app = [0] * self.num_app
 
         self.rank_of_pe = None
+        self.rank_of_cpu_pe = None
+        self.num_of_cpu_pe = 0
+        self.solutions = []
 
 
     def do_schedule(self):
         self.synthetic_heuristic()
-
-        final_mappings = self.get_mappings()
         # self.print_mapped_layers_on_each_pe()
-        return final_mappings
+        return self.solutions 
 
 
     def synthetic_heuristic(self):
-        # 1. apply PEFT to each application
+        # XXX: apply PEFT to each application
         self.calculate_oct_and_rank_oct()
         for app_idx, app in enumerate(self.app_list):
             self.initialize_variables_for_peft()
             self.peft_algorithm(app, len(app.layer_list), False)
 
-        # 2. In case of multiple PEFTs, 
-        if self.num_app > 1:
+        # XXX: In case of multiple PEFTs, 
+        if self.num_app == 1:
+            self.solutions.append(self.get_mappings())
+        else:
             self.rank_processors()
             self.initial_synthesis()
             self.reconfigure_synthesis()
-
-        self.fitness.calculate_fitness(self.get_mappings()[0])
 
 
     def calculate_oct_and_rank_oct(self):
@@ -260,6 +262,7 @@ class JHeuristic(MapFunc):
     def rank_processors(self):
         sample_app = self.app_list[0]
         dict_pe_to_sum = dict()
+        dict_cpu_pe_to_sum = dict()
 
         # get sum of layer's execution time for each PE
         for p_idx, p in enumerate(self.pe_list):
@@ -268,10 +271,14 @@ class JHeuristic(MapFunc):
                 if not l.is_start_node and not l.is_end_node:
                     exec_sum += l.time_list[p_idx]
             dict_pe_to_sum[p_idx] = exec_sum
+            if p.get_type() == PEType.CPU:
+                dict_cpu_pe_to_sum[p_idx] = exec_sum
+                self.num_of_cpu_pe += 1
 
         # sorted upward by sum
         # XXX: index = rank, content = processor's index
 	self.rank_of_pe = sorted(dict_pe_to_sum, key=lambda k : dict_pe_to_sum[k])
+	self.rank_of_cpu_pe = sorted(dict_cpu_pe_to_sum, key=lambda k : dict_cpu_pe_to_sum[k])
 
 
     def initial_synthesis(self):
@@ -306,7 +313,65 @@ class JHeuristic(MapFunc):
 
 
     def reconfigure_synthesis(self):
-        pass
+        # XXX: get result of present(initial) mapping
+        initial_mapping = self.get_mappings()[0]
+        init_res_tuple = self.fitness.calculate_fitness(initial_mapping)
+        if self.is_schedulable(initial_mapping):
+            self.solutions.append(initial_mapping)
+
+        prev_res_tuple = init_res_tuple
+        cpu_idx = 0
+        for a_idx, a in enumerate(self.app_list):
+            progress = 0
+            interval = 5
+            next_fast_pe = 0
+            while progress <= len(a.layer_list):
+                for l in a.layer_list[progress:progress+interval]:
+                    target_pe = self.pe_list[self.rank_of_pe[next_fast_pe]] # the next fast processor
+
+                    if not l.is_start_node and not l.is_end_node:
+                        for layer in self.mapped_layers_per_pe[target_pe.get_idx()]:
+                            if layer.priority != l.priority:
+                                next_fast_pe += 1
+                                if next_fast_pe == len(self.rank_of_pe):
+                                    print "+++++++++++++++++++++"
+                                    return 0
+                                break
+                            l.set_pe(target_pe)
+                            self.mapped_layers_per_pe[target_pe.get_idx()].append(l)
+
+                    else:
+                        if len(self.rank_of_cpu_pe) >= 2:
+                            target_cpu_pe = self.pe_list[self.rank_of_cpu_pe[cpu_idx]]
+                            l.set_pe(target_cpu_pe)
+                            self.mapped_layers_per_pe[target_cpu_pe.get_idx()].append(l)
+
+                mapping = self.get_mappings()[0]
+                if self.is_schedulable(mapping):
+                    res_tuple = self.fitness.calculate_fitness(mapping)
+                    for idx, t in enumerate(res_tuple):
+                        if t < prev_res_tuple[idx]:
+                            self.solutions.append(mapping)
+                            prev_res_tuple = res_tuple
+                            break
+
+                progress += interval
+
+            cpu_idx += 1
+            if cpu_idx == len(self.rank_of_cpu_pe):
+                cpu_idx = 0
+
+
+    def is_schedulable(self, mapping):
+        csts, objs = SchedSimulator._get_csts_and_objs(self.fitness, mapping)
+        available_results = True
+        for idx, (cst, value) in enumerate(zip(self.fitness.csts, csts)):
+            if value[0] != 0:
+                available_results = False
+                break
+        config.available_results = available_results
+
+        return available_results
 
 
     def get_interference_from_pe(self, target_app, target_pe, occupation_matrix):
