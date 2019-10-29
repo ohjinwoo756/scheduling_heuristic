@@ -47,8 +47,8 @@ class JHeuristic(MapFunc):
             self.solutions.append(self.get_mappings())
         else:
             self.rank_processors()
-            self.initial_synthesis()
-            self.reconfigure_synthesis()
+            # self.initial_synthesis()
+            self.peft_synthesis()
 
 
     def calculate_oct_and_rank_oct(self):
@@ -281,38 +281,41 @@ class JHeuristic(MapFunc):
 	self.rank_of_cpu_pe = sorted(dict_cpu_pe_to_sum, key=lambda k : dict_cpu_pe_to_sum[k])
 
 
-    def initial_synthesis(self):
-        for a_idx, a in enumerate(self.app_list):
-            max_parallel = self.get_max_parallelism_of(a)
-            if max_parallel >= self.num_pe:
-                shrink_parallelism(a)
+    # FIXME: deprecated
+    # def initial_synthesis(self):
+    #     for a_idx, a in enumerate(self.app_list):
+    #         max_parallel = self.get_max_parallelism_of(a)
+    #         if max_parallel >= self.num_pe:
+    #             shrink_parallelism(a)
 
 
-    def get_max_parallelism_of(self, app):
-        max_parallel_of_app = 1
-        for l_idx , l in enumerate(app.layer_list):
-            max_parallel = 0
-            out_edges = l.app.graph._out_edge[l]
-            if len(out_edges) >= 2: # if parallel structure
-                mapped = []
-                for e in out_edges:
-                    rp = e.receiver.get_pe()
-                    if rp not in mapped:
-                        mapped.append(rp)
-                        max_parallel += 1
-            if max_parallel > max_parallel_of_app:
-                max_parallel_of_app = max_parallel
+    # FIXME: deprecated
+    # def get_max_parallelism_of(self, app):
+    #     max_parallel_of_app = 1
+    #     for l_idx , l in enumerate(app.layer_list):
+    #         max_parallel = 0
+    #         out_edges = l.app.graph._out_edge[l]
+    #         if len(out_edges) >= 2: # if parallel structure
+    #             mapped = []
+    #             for e in out_edges:
+    #                 rp = e.receiver.get_pe()
+    #                 if rp not in mapped:
+    #                     mapped.append(rp)
+    #                     max_parallel += 1
+    #         if max_parallel > max_parallel_of_app:
+    #             max_parallel_of_app = max_parallel
 
-        return max_parallel_of_app
-
-
-    def shrink_parallelism(self, app):
-        for l_idx, l in enumerate(app.layer_list):
-            if l.get_pe() == self.rank_of_pe[-1]:
-                l.set_pe(self.rank_of_pe[0])
+    #     return max_parallel_of_app
 
 
-    def reconfigure_synthesis(self):
+    # FIXME: deprecated
+    # def shrink_parallelism(self, app):
+    #     for l_idx, l in enumerate(app.layer_list):
+    #         if l.get_pe() == self.rank_of_pe[-1]:
+    #             l.set_pe(self.rank_of_pe[0])
+
+
+    def peft_synthesis(self):
         # XXX: get result of present(initial) mapping
         initial_mapping = self.get_mappings()[0]
         init_res_tuple = self.fitness.calculate_fitness(initial_mapping)
