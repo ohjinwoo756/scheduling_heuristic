@@ -44,7 +44,7 @@ class JHeuristic(MapFunc):
 
         # XXX: In case of multiple PEFTs, 
         if self.num_app == 1:
-            self.solutions.append(self.get_mappings())
+            self.solutions.append(self.get_mappings()[0])
         else:
             self.rank_processors()
             # self.initial_synthesis()
@@ -316,53 +316,61 @@ class JHeuristic(MapFunc):
 
 
     def peft_synthesis(self):
-        # XXX: get result of present(initial) mapping
+        # XXX: get WCRT from initial mapping
         initial_mapping = self.get_mappings()[0]
         init_res_tuple = self.fitness.calculate_fitness(initial_mapping)
         if self.is_schedulable(initial_mapping):
             self.solutions.append(initial_mapping)
 
         prev_res_tuple = init_res_tuple
-        cpu_idx = 0
-        for a_idx, a in enumerate(self.app_list):
+        chunk = 5
+
+        # XXX: from the highest to lowest priority application
+        for app in self.app_list: 
             progress = 0
-            interval = 5
-            next_fast_pe = 0
-            while progress <= len(a.layer_list):
-                for l in a.layer_list[progress:progress+interval]:
-                    target_pe = self.pe_list[self.rank_of_pe[next_fast_pe]] # the next fast processor
 
-                    if not l.is_start_node and not l.is_end_node:
-                        for layer in self.mapped_layers_per_pe[target_pe.get_idx()]:
-                            if layer.priority != l.priority:
-                                next_fast_pe += 1
-                                if next_fast_pe == len(self.rank_of_pe):
-                                    print "+++++++++++++++++++++"
-                                    return 0
-                                break
-                            l.set_pe(target_pe)
-                            self.mapped_layers_per_pe[target_pe.get_idx()].append(l)
+            while progress <= len(app.layer_list):
+                moving_layers = app.layer_list[progress:progress+chunk]
+                perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
+                sum_of_perf_per_pe = [0] * self.num_pe
+                max_perf_improv = -float("inf")
+                max_perf_improv_pe = None
+                passable = False
 
-                    else:
-                        if len(self.rank_of_cpu_pe) >= 2:
-                            target_cpu_pe = self.pe_list[self.rank_of_cpu_pe[cpu_idx]]
-                            l.set_pe(target_cpu_pe)
-                            self.mapped_layers_per_pe[target_cpu_pe.get_idx()].append(l)
-
-                mapping = self.get_mappings()[0]
-                if self.is_schedulable(mapping):
+                # from the 2nd fast processor
+                for pe in self.rank_of_pe[1:]:
+                    self.move_to(moving_layers, self.pe_list[pe]) # temporarily
+                    mapping = self.get_mappings()[0]
                     res_tuple = self.fitness.calculate_fitness(mapping)
-                    for idx, t in enumerate(res_tuple):
-                        if t < prev_res_tuple[idx]:
-                            self.solutions.append(mapping)
-                            prev_res_tuple = res_tuple
-                            break
+                    for app_idx, res in enumerate(res_tuple):
+                        abs_diff = abs(res - prev_res_tuple[app_idx])
+                        if res < prev_res_tuple[app_idx]:
+                            perf_improv_per_app[pe][app_idx] = [1, abs_diff]
+                        else:
+                            perf_improv_per_app[pe][app_idx] = [-1, abs_diff]
+                        sum_of_perf_per_pe[pe] += perf_improv_per_app[pe][app_idx][0] * \
+                                                    perf_improv_per_app[pe][app_idx][1]
 
-                progress += interval
+                    if sum_of_perf_per_pe[pe] > max_perf_improv:
+                        max_perf_improv = sum_of_perf_per_pe[pe]
+                        max_perf_improv_pe = self.pe_list[pe]
+                        for app_idx, app in enumerate(self.app_list):
+                            if perf_improv_per_app[pe][app_idx][0] == 1:
+                                passable = True
 
-            cpu_idx += 1
-            if cpu_idx == len(self.rank_of_cpu_pe):
-                cpu_idx = 0
+                    self.initialize_move(moving_layers, self.pe_list[pe]) # initialize
+
+                self.move_to(moving_layers, max_perf_improv_pe) # final assignment
+                mapping = self.get_mappings()[0]
+                res_tuple = self.fitness.calculate_fitness(mapping)
+                prev_res_tuple = res_tuple
+
+                if not passable:
+                    break
+                if self.is_schedulable(mapping):
+                    self.solutions.append(mapping)
+
+                progress += chunk 
 
 
     def is_schedulable(self, mapping):
@@ -375,6 +383,15 @@ class JHeuristic(MapFunc):
         config.available_results = available_results
 
         return available_results
+
+
+    def move_to(self, moving_layers, processor):
+        for l in moving_layers:
+            self.assign_processor(l, processor)
+
+
+    def initialize_move(self, moving_layers, processor):
+        pass
 
 
     def get_interference_from_pe(self, target_app, target_pe, occupation_matrix):
