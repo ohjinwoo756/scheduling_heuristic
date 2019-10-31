@@ -322,15 +322,24 @@ class JHeuristic(MapFunc):
         if self.is_schedulable(initial_mapping):
             self.solutions.append(initial_mapping)
 
-        prev_res_tuple = init_res_tuple
+        prev_result_tuple = init_res_tuple
         chunk = 5
 
-        # XXX: from the highest to lowest priority application
+        # XXX: move layers in apps from  highest to lowest priority
         for app in self.app_list: 
             progress = 0
 
-            while progress <= len(app.layer_list):
-                moving_layers = app.layer_list[progress:progress+chunk]
+            while True:
+
+                # XXX: control progress
+                if progress + chunk > len(app.layer_list):
+                    new_chunk = len(app.layer_list) - progress
+                    moving_layers = app.layer_list[progress:progress + new_chunk]
+                else:
+                    moving_layers = app.layer_list[progress:progress + chunk]
+
+                # XXX: row = PE, col = App
+                # XXX: content = list [-1/1, absolute difference]
                 perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
                 sum_of_perf_per_pe = [0] * self.num_pe
                 max_perf_improv = -float("inf")
@@ -338,39 +347,53 @@ class JHeuristic(MapFunc):
                 passable = False
 
                 # from the 2nd fast processor
+                # XXX: this loop is for calculating WCRT of temporarily mapped schedule
                 for pe in self.rank_of_pe[1:]:
-                    self.move_to(moving_layers, self.pe_list[pe]) # temporarily
+                    self.move_to(moving_layers, self.pe_list[pe]) # temporarily 
                     mapping = self.get_mappings()[0]
-                    res_tuple = self.fitness.calculate_fitness(mapping)
-                    for app_idx, res in enumerate(res_tuple):
-                        abs_diff = abs(res - prev_res_tuple[app_idx])
-                        if res < prev_res_tuple[app_idx]:
-                            perf_improv_per_app[pe][app_idx] = [1, abs_diff]
+                    result_tuple = self.fitness.calculate_fitness(mapping)
+                    # for a PE, each apps
+                    for app_idx, res in enumerate(result_tuple):
+                        abs_diff = abs(res - prev_result_tuple[app_idx])
+                        if res < prev_result_tuple[app_idx]:
+                            perf_improv_per_app[pe][app_idx] = [1, abs_diff] # performance increases
                         else:
-                            perf_improv_per_app[pe][app_idx] = [-1, abs_diff]
+                            perf_improv_per_app[pe][app_idx] = [-1, abs_diff] # performance decreases
                         sum_of_perf_per_pe[pe] += perf_improv_per_app[pe][app_idx][0] * \
                                                     perf_improv_per_app[pe][app_idx][1]
+                    self.initialize_move(moving_layers, self.pe_list[pe]) # initialize
 
+                # from the 2nd fast processor
+                # XXX: select the best fit PE
+                for pe in self.rank_of_pe[1:]:
                     if sum_of_perf_per_pe[pe] > max_perf_improv:
                         max_perf_improv = sum_of_perf_per_pe[pe]
                         max_perf_improv_pe = self.pe_list[pe]
+                        # XXX: this selection has possibility of performance increasing?
+                        # XXX: If any app performs better than before, keep going peft synthesis
                         for app_idx, app in enumerate(self.app_list):
                             if perf_improv_per_app[pe][app_idx][0] == 1:
                                 passable = True
 
-                    self.initialize_move(moving_layers, self.pe_list[pe]) # initialize
-
-                self.move_to(moving_layers, max_perf_improv_pe) # final assignment
-                mapping = self.get_mappings()[0]
-                res_tuple = self.fitness.calculate_fitness(mapping)
-                prev_res_tuple = res_tuple
-
+                # XXX: if any app doesn't perform better than before, stop layer moving for this app
                 if not passable:
                     break
+
+                # final assignment to the best fit PE
+                self.move_to(moving_layers, max_perf_improv_pe)
+                mapping = self.get_mappings()[0]
+                result_tuple = self.fitness.calculate_fitness(mapping)
+                # update previous result tuple
+                prev_result_tuple = result_tuple
+
                 if self.is_schedulable(mapping):
                     self.solutions.append(mapping)
 
-                progress += chunk 
+                # XXX: [while loop] stopping condition
+                if progress + chunk > len(app.layer_list):
+                    break
+                else:
+                    progress += chunk
 
 
     def is_schedulable(self, mapping):
