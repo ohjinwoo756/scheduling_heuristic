@@ -327,12 +327,11 @@ class JHeuristic(MapFunc):
 
         # XXX: move layers in apps from  highest to lowest priority
         for app in self.app_list: 
-            progress = 0
+            progress = 1 # except for frontend layer
 
             while True:
-
                 # XXX: control progress
-                if progress + chunk > len(app.layer_list):
+                if progress + chunk > len(app.layer_list)-1: # except for frontend and backend layer
                     new_chunk = len(app.layer_list) - progress
                     moving_layers = app.layer_list[progress:progress + new_chunk]
                 else:
@@ -366,6 +365,7 @@ class JHeuristic(MapFunc):
                 # from the 2nd fast processor
                 # XXX: select the best fit PE
                 for pe in self.rank_of_pe[1:]:
+                    print pe, " | ", sum_of_perf_per_pe[pe]
                     if sum_of_perf_per_pe[pe] > max_perf_improv:
                         max_perf_improv = sum_of_perf_per_pe[pe]
                         max_perf_improv_pe = self.pe_list[pe]
@@ -376,6 +376,7 @@ class JHeuristic(MapFunc):
                                 passable = True
 
                 # XXX: if any app doesn't perform better than before, stop layer moving for this app
+                # go to the BREAK POINT below
                 if not passable:
                     break
 
@@ -390,10 +391,14 @@ class JHeuristic(MapFunc):
                     self.solutions.append(mapping)
 
                 # XXX: [while loop] stopping condition
-                if progress + chunk > len(app.layer_list):
+                if progress + chunk > len(app.layer_list)-1:
                     break
                 else:
                     progress += chunk
+
+            # BREAK POINT
+            if not passable:
+                break
 
 
     def is_schedulable(self, mapping):
