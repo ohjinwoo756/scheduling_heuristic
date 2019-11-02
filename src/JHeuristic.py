@@ -28,6 +28,11 @@ class JHeuristic(MapFunc):
         self.num_of_cpu_pe = 0
         self.solutions = []
 
+        # XXX: row = PE, col = App
+        # XXX: content = list [-1/1, absolute difference]
+        self.perf_improv_per_app = None
+        self.sum_of_perf_per_pe = None
+
 
     def do_schedule(self):
         self.synthetic_heuristic()
@@ -279,6 +284,7 @@ class JHeuristic(MapFunc):
         # XXX: index = rank, content = processor's index
 	self.rank_of_pe = sorted(dict_pe_to_sum, key=lambda k : dict_pe_to_sum[k])
 	self.rank_of_cpu_pe = sorted(dict_cpu_pe_to_sum, key=lambda k : dict_cpu_pe_to_sum[k])
+        # print self.rank_of_pe
 
 
     # FIXME: deprecated
@@ -316,89 +322,43 @@ class JHeuristic(MapFunc):
 
 
     def peft_synthesis(self):
-        # XXX: get WCRT from initial mapping
         initial_mapping = self.get_mappings()[0]
+        self.get_solution_if_schedulable(self.get_mappings()[0])
+
+        # get WCRT from initial mapping
         init_res_tuple = self.fitness.calculate_fitness(initial_mapping)
-        if self.is_schedulable(initial_mapping):
-            self.solutions.append(initial_mapping)
-
         prev_result_tuple = init_res_tuple
-        chunk = 5
 
-        # XXX: move layers in apps from  highest to lowest priority
-        for app in self.app_list: 
-            progress = 1 # except for frontend layer
-
+        chunk = 7
+        for app in self.app_list: # XXX: move layers in apps from  highest to lowest priority
+            progress = 0
             while True:
-                # XXX: control progress
-                if progress + chunk > len(app.layer_list)-1: # except for frontend and backend layer
-                    new_chunk = len(app.layer_list) - progress
-                    moving_layers = app.layer_list[progress:progress + new_chunk]
-                else:
-                    moving_layers = app.layer_list[progress:progress + chunk]
+                self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
+                self.sum_of_perf_per_pe = [0] * self.num_pe
 
-                # XXX: row = PE, col = App
-                # XXX: content = list [-1/1, absolute difference]
-                perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
-                sum_of_perf_per_pe = [0] * self.num_pe
-                max_perf_improv = -float("inf")
-                max_perf_improv_pe = None
-                passable = False
+                # stopping condition 1
+                if progress == len(app.layer_list):
+                    return 0
 
-                # from the 2nd fast processor
-                # XXX: this loop is for calculating WCRT of temporarily mapped schedule
-                for pe in self.rank_of_pe[1:]:
-                    self.move_to(moving_layers, self.pe_list[pe]) # temporarily 
-                    mapping = self.get_mappings()[0]
-                    result_tuple = self.fitness.calculate_fitness(mapping)
-                    # for a PE, each apps
-                    for app_idx, res in enumerate(result_tuple):
-                        abs_diff = abs(res - prev_result_tuple[app_idx])
-                        if res < prev_result_tuple[app_idx]:
-                            perf_improv_per_app[pe][app_idx] = [1, abs_diff] # performance increases
-                        else:
-                            perf_improv_per_app[pe][app_idx] = [-1, abs_diff] # performance decreases
-                        sum_of_perf_per_pe[pe] += perf_improv_per_app[pe][app_idx][0] * \
-                                                    perf_improv_per_app[pe][app_idx][1]
-                    self.initialize_move(moving_layers, self.pe_list[pe]) # initialize
+                progress, moving_layers = self.update_variables(app, chunk, progress)
 
-                # from the 2nd fast processor
-                # XXX: select the best fit PE
-                for pe in self.rank_of_pe[1:]:
-                    print pe, " | ", sum_of_perf_per_pe[pe]
-                    if sum_of_perf_per_pe[pe] > max_perf_improv:
-                        max_perf_improv = sum_of_perf_per_pe[pe]
-                        max_perf_improv_pe = self.pe_list[pe]
-                        # XXX: this selection has possibility of performance increasing?
-                        # XXX: If any app performs better than before, keep going peft synthesis
-                        for app_idx, app in enumerate(self.app_list):
-                            if perf_improv_per_app[pe][app_idx][0] == 1:
-                                passable = True
+                for target_pe in self.rank_of_pe[1:]:
+                    self.calc_perf_improv_on(moving_layers, target_pe, prev_result_tuple)
+                max_perf_improv_pe = self.select_the_best_perf_improv()
 
-                # XXX: if any app doesn't perform better than before, stop layer moving for this app
-                # go to the BREAK POINT below
-                if not passable:
-                    break
+                # stopping condition 2
+                if not self.is_passable(max_perf_improv_pe):
+                    return 0
 
-                # final assignment to the best fit PE
-                self.move_to(moving_layers, max_perf_improv_pe)
+                self.move_to(moving_layers, max_perf_improv_pe) # final processor assignment
                 mapping = self.get_mappings()[0]
-                result_tuple = self.fitness.calculate_fitness(mapping)
-                # update previous result tuple
-                prev_result_tuple = result_tuple
+                self.get_solution_if_schedulable(mapping)
+                prev_result_tuple = self.fitness.calculate_fitness(mapping) # update WCRT
 
-                if self.is_schedulable(mapping):
-                    self.solutions.append(mapping)
 
-                # XXX: [while loop] stopping condition
-                if progress + chunk > len(app.layer_list)-1:
-                    break
-                else:
-                    progress += chunk
-
-            # BREAK POINT
-            if not passable:
-                break
+    def get_solution_if_schedulable(self, mapping):
+        if self.is_schedulable(mapping):
+            self.solutions.append(mapping)
 
 
     def is_schedulable(self, mapping):
@@ -409,8 +369,68 @@ class JHeuristic(MapFunc):
                 available_results = False
                 break
         config.available_results = available_results
-
         return available_results
+
+
+    def update_variables(self, app, chunk, progress):
+        if progress == 0 or progress == len(app.layer_list)-1:
+            moving_layers = app.layer_list[progress:progress + 1]
+            progress += 1
+        else: # if the other layers
+            if progress + chunk > len(app.layer_list)-1:
+                new_chunk = len(app.layer_list)-1 - progress
+                moving_layers = app.layer_list[progress:progress + new_chunk]
+                progress += new_chunk
+            else:
+                moving_layers = app.layer_list[progress:progress + chunk]
+                progress += chunk
+
+        return progress, moving_layers
+
+
+    def calc_perf_improv_on(self, moving_layers, pe, prev_result_tuple):
+        initial_mappings = self.get_mappings_of(moving_layers)
+        self.move_to(moving_layers, self.pe_list[pe]) # temporary
+        mapping = self.get_mappings()[0] # calculate WCRT of changed mapping
+        result_tuple = self.fitness.calculate_fitness(mapping)
+        # for a PE, each apps
+        for app_idx, res in enumerate(result_tuple):
+            abs_diff = abs(res - prev_result_tuple[app_idx])
+            if res < prev_result_tuple[app_idx]:
+                self.perf_improv_per_app[pe][app_idx] = [1, abs_diff] # performance increases
+            else:
+                self.perf_improv_per_app[pe][app_idx] = [-1, abs_diff] # performance decreases
+            self.sum_of_perf_per_pe[pe] += self.perf_improv_per_app[pe][app_idx][0] * \
+                                        self.perf_improv_per_app[pe][app_idx][1]
+        self.initialize_move(moving_layers, initial_mappings) # initialize
+
+
+    def select_the_best_perf_improv(self):
+        max_perf_improv = -float("inf")
+        for pe in self.rank_of_pe[1:]:
+            # print self.sum_of_perf_per_pe[pe]
+            if self.sum_of_perf_per_pe[pe] > max_perf_improv:
+                max_perf_improv = self.sum_of_perf_per_pe[pe]
+                max_perf_improv_pe = self.pe_list[pe]
+        # print "-----------------------------"
+        return max_perf_improv_pe
+
+
+    def is_passable(self, max_perf_improv_pe):
+        # XXX: possibility of performance increasing.
+        # XXX: If any app performs better than before, it's passable. 
+        passable = False
+        for app_idx, app in enumerate(self.app_list):
+            if self.perf_improv_per_app[max_perf_improv_pe.get_idx()][app_idx][0] == 1:
+                passable = True
+        return passable
+
+
+    def get_mappings_of(self, moving_layers):
+        pe_list = list()
+        for l in moving_layers:
+            pe_list.append(l.get_pe())
+        return pe_list
 
 
     def move_to(self, moving_layers, processor):
@@ -418,8 +438,9 @@ class JHeuristic(MapFunc):
             self.assign_processor(l, processor)
 
 
-    def initialize_move(self, moving_layers, processor):
-        pass
+    def initialize_move(self, moving_layers, initial_mappings):
+        for idx, l in enumerate(moving_layers):
+            self.assign_processor(l, initial_mappings[idx])
 
 
     def get_interference_from_pe(self, target_app, target_pe, occupation_matrix):
