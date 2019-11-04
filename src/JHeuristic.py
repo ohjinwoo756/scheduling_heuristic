@@ -55,6 +55,7 @@ class JHeuristic(MapFunc):
             self.solutions.append(self.get_mappings()[0])
         else:
             self.rank_processors()
+            self.initial_fb_mappings()
             # self.initial_synthesis()
             self.peft_synthesis()
 
@@ -303,6 +304,18 @@ class JHeuristic(MapFunc):
         for p_idx, p in enumerate(self.pe_list):
             if p.get_type() == PEType.CPU: 
                 self.img_pe.append(p)
+
+
+    def initial_fb_mappings(self):
+        for app_idx, app in enumerate(self.app_list):
+            moving_layers = [app.layer_list[0], app.layer_list[-1]]
+
+            if app_idx <= len(self.img_pe)-1:
+                target_img_pe = self.pe_list[self.rank_of_img_pe[app_idx]]
+                self.move_to(moving_layers, target_img_pe)
+            else:
+                min_rank_img_pe = self.pe_list[self.rank_of_img_pe[-1]]
+                self.move_to(moving_layers, min_rank_img_pe)
 
 
     # FIXME: deprecated
