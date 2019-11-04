@@ -24,8 +24,10 @@ class JHeuristic(MapFunc):
         self.progress_by_app = [0] * self.num_app
 
         self.rank_of_pe = None
-        self.rank_of_cpu_pe = None
-        self.num_of_cpu_pe = 0
+        self.rank_of_img_pe = None
+        self.img_processor = list()
+        self.num_of_img_pe = 0
+
         self.solutions = []
 
         # XXX: row = PE, col = App
@@ -53,7 +55,7 @@ class JHeuristic(MapFunc):
         else:
             self.rank_processors()
             # self.initial_synthesis()
-            self.peft_synthesis()
+            # self.peft_synthesis()
 
 
     def calculate_oct_and_rank_oct(self):
@@ -265,26 +267,40 @@ class JHeuristic(MapFunc):
 
 
     def rank_processors(self):
-        sample_app = self.app_list[0]
+        sample_app = self.app_list[0] # XXX: The type of app doesn't matter, it's just sample
         dict_pe_to_sum = dict()
-        dict_cpu_pe_to_sum = dict()
+        dict_img_pe_to_sum = dict()
 
         # get sum of layer's execution time for each PE
         for p_idx, p in enumerate(self.pe_list):
             exec_sum = 0
+            # XXX: analyze all layer on the PE, not specific one layer
             for l in sample_app.layer_list:
+                # XXX: because non-img-processor has very large execution time for frontend and backend layer
                 if not l.is_start_node and not l.is_end_node:
                     exec_sum += l.time_list[p_idx]
+
+            # processors will be ranked by execution sum
             dict_pe_to_sum[p_idx] = exec_sum
+
+            # rank image processors
             if p.get_type() == PEType.CPU:
-                dict_cpu_pe_to_sum[p_idx] = exec_sum
-                self.num_of_cpu_pe += 1
+                dict_img_pe_to_sum[p_idx] = exec_sum
+                self.num_of_img_pe += 1
 
         # sorted upward by sum
         # XXX: index = rank, content = processor's index
 	self.rank_of_pe = sorted(dict_pe_to_sum, key=lambda k : dict_pe_to_sum[k])
-	self.rank_of_cpu_pe = sorted(dict_cpu_pe_to_sum, key=lambda k : dict_cpu_pe_to_sum[k])
-        # print self.rank_of_pe
+	self.rank_of_img_pe = sorted(dict_img_pe_to_sum, key=lambda k : dict_img_pe_to_sum[k])
+        print self.rank_of_pe
+        print self.rank_of_img_pe
+
+
+    # XXX: It should not be only CPU, It's okay if the PE is image processor
+    def designate_img_processor(self):
+        for p in self.pe_list:
+            if p.get_type() == PEType.CPU: 
+                self.img_processor.append(p)
 
 
     # FIXME: deprecated
