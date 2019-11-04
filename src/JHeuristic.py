@@ -329,16 +329,20 @@ class JHeuristic(MapFunc):
         init_res_tuple = self.fitness.calculate_fitness(initial_mapping)
         prev_result_tuple = init_res_tuple
 
-        chunk = 7
+        chunk = 3
         for app in self.app_list: # XXX: move layers in apps from  highest to lowest priority
             progress = 0
             while True:
                 self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
                 self.sum_of_perf_per_pe = [0] * self.num_pe
 
-                # stopping condition 1
+                # stopping condition: exit while loop
                 if progress == len(app.layer_list):
-                    return 0
+                    print "*************************"
+                    print "END", app
+                    print "MOVE TO NEXT APPLICATION"
+                    print "*************************"
+                    break
 
                 progress, moving_layers = self.update_variables(app, chunk, progress)
 
@@ -346,9 +350,14 @@ class JHeuristic(MapFunc):
                     self.calc_perf_improv_on(moving_layers, target_pe, prev_result_tuple)
                 max_perf_improv_pe = self.select_the_best_perf_improv()
 
-                # stopping condition 2
+                # stopping condition: exit algorithm
                 if not self.is_passable(max_perf_improv_pe):
-                    return 0
+                    print "********************************"
+                    print "EXIT ALGORITHM CAUSE UNPASSABLE"
+                    print "PROGRESS: ", progress
+                    print "********************************"
+                    # return 0
+                    break
 
                 self.move_to(moving_layers, max_perf_improv_pe) # final processor assignment
                 mapping = self.get_mappings()[0]
