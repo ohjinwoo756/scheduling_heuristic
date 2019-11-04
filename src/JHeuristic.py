@@ -27,7 +27,7 @@ class JHeuristic(MapFunc):
         self.rank_of_pe = None
         self.rank_of_img_pe = None
         self.img_pe = list()
-        self.pe_explore_scope = None
+        # self.pe_explore_scope = None # FIXME: deprecated
         self.num_of_img_pe = 0
 
         # XXX: row = PE, col = App
@@ -384,8 +384,10 @@ class JHeuristic(MapFunc):
         for chunk in chunk_unit_list:
             temp_progress, temp_moving_layers = self.update_variables(app, chunk, progress)
 
-            self.pe_explore_scope = self.get_pe_explore_scope()
-            for target_pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
+            # FIXME: deprecated
+            # self.pe_explore_scope = self.get_pe_explore_scope()
+            # for target_pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
+            for target_pe in self.rank_of_pe[1:]:
                 self.calc_perf_improv_on(temp_moving_layers, target_pe, prev_result_tuple)
             max_perf_improv_pe = self.select_the_best_perf_improv()
 
@@ -453,9 +455,10 @@ class JHeuristic(MapFunc):
         return progress, moving_layers
 
 
-    def get_pe_explore_scope(self):
-        return self.num_app
-        # return self.num_pe-1
+    # FIXME: deprecated
+    # def get_pe_explore_scope(self):
+    #     return self.num_app
+    #     # return self.num_pe-1
 
 
     def calc_perf_improv_on(self, moving_layers, pe, prev_result_tuple):
@@ -477,9 +480,11 @@ class JHeuristic(MapFunc):
 
     def select_the_best_perf_improv(self):
         max_perf_improv = -float("inf")
-        self.pe_explore_scope = self.get_pe_explore_scope()
 
-        for pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
+        # FIXME: deprecated
+        # self.pe_explore_scope = self.get_pe_explore_scope()
+        # for pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
+        for pe in self.rank_of_pe[1:]:
             # print self.sum_of_perf_per_pe[pe]
             if self.sum_of_perf_per_pe[pe] > max_perf_improv:
                 max_perf_improv = self.sum_of_perf_per_pe[pe]

@@ -415,6 +415,6 @@ if __name__ == '__main__':
 
     start = time.time()
     main_thread()
-    visualize_result()
     print "\n[ELAPSED TIME] %.2f" % (time.time() - start)
+    visualize_result()
 
