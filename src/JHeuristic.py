@@ -23,12 +23,11 @@ class JHeuristic(MapFunc):
         self.optimistic_cost_hash = dict() # for speed up
 
         self.progress_by_app = [0] * self.num_app
-        self.chunk_unit_list = [3, 6, 9, 12]
 
         self.rank_of_pe = None
         self.rank_of_img_pe = None
-        self.img_processor = list()
-        self.num_of_img_pe = 0
+        self.img_pe = list()
+        # self.num_of_img_pe = 0
 
         # XXX: row = PE, col = App
         # XXX: content = list [-1/1, absolute difference]
@@ -36,7 +35,6 @@ class JHeuristic(MapFunc):
         self.sum_of_perf_per_pe = None
 
         self.solutions = []
-
 
 
     def do_schedule(self):
@@ -169,7 +167,7 @@ class JHeuristic(MapFunc):
         self.mapped_layers_per_pe = [[] for _ in range(self.num_pe)]
 
 
-    # XXX: target_app.layer_list[self.progress_by_app[target_app.priority-1] : coverage] will be processed
+    # DEPRECATED: target_app.layer_list[self.progress_by_app[target_app.priority-1]:coverage] will be processed
     def peft_algorithm(self, target_app, coverage, is_modified=False):
         highest_rank_oct_layers, layers_rank_oct, ready_list = self._init_variables(target_app, coverage)
 
@@ -289,7 +287,8 @@ class JHeuristic(MapFunc):
             # rank image processors
             if p.get_type() == PEType.CPU:
                 dict_img_pe_to_sum[p_idx] = exec_sum
-                self.num_of_img_pe += 1
+                self.designate_img_processor()
+                # self.num_of_img_pe += 1
 
         # sorted upward by sum
         # XXX: index = rank, content = processor's index
@@ -301,9 +300,9 @@ class JHeuristic(MapFunc):
 
     # XXX: It should not be only CPU, It's okay if the PE is image processor
     def designate_img_processor(self):
-        for p in self.pe_list:
+        for p_idx, p in enumerate(self.pe_list):
             if p.get_type() == PEType.CPU: 
-                self.img_processor.append(p)
+                self.img_pe.append(p)
 
 
     # FIXME: deprecated
@@ -349,55 +348,70 @@ class JHeuristic(MapFunc):
         prev_result_tuple = init_res_tuple
 
         for app in self.app_list: # XXX: move layers in apps from highest to lowest priority
-            whether_go_to_next_app = False
-            progress = 0
+            # whether_go_to_next_app = False
+            progress = 1 # XXX: frontend layer is not in the progress
             while True:
                 self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
                 self.sum_of_perf_per_pe = [0] * self.num_pe
 
-                if progress == len(app.layer_list):
+                if progress == len(app.layer_list)-1: # XXX: backend layer is not in the progress 
                     print "*************************"
                     print "[FULL PROGRESS] MOVE TO NEXT APPLICATION"
                     print "\tEND", app
-                    print "\tPROGRESS: ", temp_progress
+                    print "\tPROGRESS: ",progress
                     break
 
-                for chunk in self.chunk_unit_list:
-                    temp_progress, temp_moving_layers = self.update_variables(app, chunk, progress)
-
-                    for target_pe in self.rank_of_pe[1:]:
-                        self.calc_perf_improv_on(temp_moving_layers, target_pe, prev_result_tuple)
-                    max_perf_improv_pe = self.select_the_best_perf_improv()
-
-                    if not self.is_passable(max_perf_improv_pe):
-                        if chunk == self.chunk_unit_list[-1]:
-                            print "********************************"
-                            print "[UNPASSABLE] move to NEXT APPLICATION"
-                            print "\tPROGRESS: ", temp_progress
-                            print "\tCHUNK: ", chunk
-                            whether_go_to_next_app = True
-                            break
-                        else:
-                            print "********************************"
-                            print "[UNPASSABLE] move to CHUNK UNIT"
-                            print "\tPROGRESS: ", temp_progress
-                            print "\tCHUNK: ", chunk
-                            continue
-                    else:
-                        progress = temp_progress # finalize final progress
-                        moving_layers = temp_moving_layers # finalize moving layers
-                        self.move_to(moving_layers, max_perf_improv_pe) # Actual processor assignment
-                        mapping = self.get_mappings()[0]
-                        self.get_solution_if_schedulable(mapping)
-                        prev_result_tuple = self.fitness.calculate_fitness(mapping) # update WCRT
-                        print "********************************"
-                        print "[PASSABLE] move to NEXT PROGRESS"
-                        print "\tPROGRESS: ", progress
-                        print "\tCHUNK: ", chunk
-                        break
+                chunk_unit_list = [3, 6, 9, 12]
+                whether_go_to_next_app, progress, moving_layers, prev_result_tuple = \
+                        self.test_on_chunk_unit_list(chunk_unit_list, app, progress, prev_result_tuple)
 
                 if whether_go_to_next_app:
                     break
+
+
+    def test_on_chunk_unit_list(self, chunk_unit_list, app, progress, prev_result_tuple):
+        whether_go_to_next_app = False
+
+        for chunk in chunk_unit_list:
+            temp_progress, temp_moving_layers = self.update_variables(app, chunk, progress)
+
+            for target_pe in self.rank_of_pe[1:]:
+                self.calc_perf_improv_on(temp_moving_layers, target_pe, prev_result_tuple)
+            max_perf_improv_pe = self.select_the_best_perf_improv()
+
+            if not self.is_passable(max_perf_improv_pe):
+                if chunk == chunk_unit_list[-1]:
+                    print "********************************"
+                    print "[UNPASSABLE] move to NEXT APPLICATION"
+                    print "\tPROGRESS: ", temp_progress
+                    print "\tCHUNK: ", chunk
+                    whether_go_to_next_app = True
+                    return whether_go_to_next_app, None, None, prev_result_tuple
+                else:
+                    print "********************************"
+                    print "[UNPASSABLE] move to CHUNK UNIT"
+                    print "\tPROGRESS: ", temp_progress
+                    print "\tCHUNK: ", chunk
+                    continue
+
+            else: # XXX: actual PE moving occurs
+                progress = temp_progress # finalize final progress
+                moving_layers = temp_moving_layers # finalize moving layers
+
+                # XXX: if detination is among image processor, move frontend and backend layer too.
+                if max_perf_improv_pe in self.img_pe:
+                    moving_layers.append(app.layer_list[0])
+                    moving_layers.append(app.layer_list[-1])
+
+                self.move_to(moving_layers, max_perf_improv_pe)
+                mapping = self.get_mappings()[0]
+                self.get_solution_if_schedulable(mapping)
+                prev_result_tuple = self.fitness.calculate_fitness(mapping) # update WCRT
+                print "********************************"
+                print "[PASSABLE] move to NEXT PROGRESS"
+                print "\tPROGRESS: ", progress
+                print "\tCHUNK: ", chunk
+                return whether_go_to_next_app, progress, moving_layers, prev_result_tuple
 
 
     def get_solution_if_schedulable(self, mapping):
@@ -416,18 +430,15 @@ class JHeuristic(MapFunc):
         return available_results
 
 
+    # XXX: frontend, backend layer is not considered
     def update_variables(self, app, chunk, progress):
-        if progress == 0 or progress == len(app.layer_list)-1:
-            moving_layers = app.layer_list[progress:progress + 1]
-            progress += 1
-        else: # if the other layers
-            if progress + chunk > len(app.layer_list)-1:
-                new_chunk = len(app.layer_list)-1 - progress
-                moving_layers = app.layer_list[progress:progress + new_chunk]
-                progress += new_chunk
-            else:
-                moving_layers = app.layer_list[progress:progress + chunk]
-                progress += chunk
+        if progress + chunk > len(app.layer_list)-1:
+            new_chunk = len(app.layer_list)-1 - progress
+            moving_layers = app.layer_list[progress:progress + new_chunk]
+            progress += new_chunk
+        else:
+            moving_layers = app.layer_list[progress:progress + chunk]
+            progress += chunk
 
         return progress, moving_layers
 
