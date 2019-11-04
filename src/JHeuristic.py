@@ -27,7 +27,8 @@ class JHeuristic(MapFunc):
         self.rank_of_pe = None
         self.rank_of_img_pe = None
         self.img_pe = list()
-        # self.num_of_img_pe = 0
+        self.pe_explore_scope = None
+        self.num_of_img_pe = 0
 
         # XXX: row = PE, col = App
         # XXX: content = list [-1/1, absolute difference]
@@ -289,7 +290,7 @@ class JHeuristic(MapFunc):
             if p.get_type() == PEType.CPU:
                 dict_img_pe_to_sum[p_idx] = exec_sum
                 self.designate_img_processor()
-                # self.num_of_img_pe += 1
+                self.num_of_img_pe += 1
 
         # sorted upward by sum
         # XXX: index = rank, content = processor's index
@@ -388,7 +389,8 @@ class JHeuristic(MapFunc):
         for chunk in chunk_unit_list:
             temp_progress, temp_moving_layers = self.update_variables(app, chunk, progress)
 
-            for target_pe in self.rank_of_pe[1:]:
+            self.pe_explore_scope = self.get_pe_explore_scope()
+            for target_pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
                 self.calc_perf_improv_on(temp_moving_layers, target_pe, prev_result_tuple)
             max_perf_improv_pe = self.select_the_best_perf_improv()
 
@@ -456,6 +458,11 @@ class JHeuristic(MapFunc):
         return progress, moving_layers
 
 
+    def get_pe_explore_scope(self):
+        return self.num_app
+        # return self.num_pe-1
+
+
     def calc_perf_improv_on(self, moving_layers, pe, prev_result_tuple):
         initial_mappings = self.get_mappings_of(moving_layers)
         self.move_to(moving_layers, self.pe_list[pe]) # temporary
@@ -475,7 +482,8 @@ class JHeuristic(MapFunc):
 
     def select_the_best_perf_improv(self):
         max_perf_improv = -float("inf")
-        for pe in self.rank_of_pe[1:]:
+        self.pe_explore_scope = self.get_pe_explore_scope()
+        for pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
             # print self.sum_of_perf_per_pe[pe]
             if self.sum_of_perf_per_pe[pe] > max_perf_improv:
                 max_perf_improv = self.sum_of_perf_per_pe[pe]
