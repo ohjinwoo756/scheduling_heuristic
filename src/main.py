@@ -13,6 +13,7 @@ from app import Application
 from util import *
 from sched_simulator import SchedSimulator
 from pe import PE
+import time
 
 import config  # Utilization variable shared across modules.
 from plot import Plot # For making plot
@@ -412,6 +413,8 @@ def visualize_result():
 
 if __name__ == '__main__':
 
+    start = time.time()
     main_thread()
     visualize_result()
+    print "\n[ELAPSED TIME] %.2f" % (time.time() - start)
 

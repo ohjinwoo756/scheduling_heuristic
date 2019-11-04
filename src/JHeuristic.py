@@ -369,10 +369,10 @@ class JHeuristic(MapFunc):
                 self.sum_of_perf_per_pe = [0] * self.num_pe
 
                 if progress == len(app.layer_list)-1: # XXX: backend layer is not in the progress 
-                    print "*************************"
-                    print "[FULL PROGRESS] MOVE TO NEXT APPLICATION"
-                    print "\tEND", app
-                    print "\tPROGRESS: ",progress
+                    # print "*************************"
+                    # print "[FULL PROGRESS] MOVE TO NEXT APPLICATION"
+                    # print "\tEND", app
+                    # print "\tPROGRESS: ",progress
                     break
 
                 chunk_unit_list = [3, 6, 9, 12]
@@ -396,17 +396,17 @@ class JHeuristic(MapFunc):
 
             if not self.is_passable(max_perf_improv_pe):
                 if chunk == chunk_unit_list[-1]:
-                    print "********************************"
-                    print "[UNPASSABLE] move to NEXT APPLICATION"
-                    print "\tPROGRESS: ", temp_progress
-                    print "\tCHUNK: ", chunk
+                    # print "********************************"
+                    # print "[UNPASSABLE] move to NEXT APPLICATION"
+                    # print "\tPROGRESS: ", temp_progress
+                    # print "\tCHUNK: ", chunk
                     whether_go_to_next_app = True
                     return whether_go_to_next_app, None, None, prev_result_tuple
                 else:
-                    print "********************************"
-                    print "[UNPASSABLE] move to CHUNK UNIT"
-                    print "\tPROGRESS: ", temp_progress
-                    print "\tCHUNK: ", chunk
+                    # print "********************************"
+                    # print "[UNPASSABLE] move to CHUNK UNIT"
+                    # print "\tPROGRESS: ", temp_progress
+                    # print "\tCHUNK: ", chunk
                     continue
 
             else: # XXX: actual PE moving occurs
@@ -422,10 +422,10 @@ class JHeuristic(MapFunc):
                 mapping = self.get_mappings()[0]
                 self.get_solution_if_schedulable(mapping)
                 prev_result_tuple = self.fitness.calculate_fitness(mapping) # update WCRT
-                print "********************************"
-                print "[PASSABLE] move to NEXT PROGRESS"
-                print "\tPROGRESS: ", progress
-                print "\tCHUNK: ", chunk
+                # print "********************************"
+                # print "[PASSABLE] move to NEXT PROGRESS"
+                # print "\tPROGRESS: ", progress
+                # print "\tCHUNK: ", chunk
                 return whether_go_to_next_app, progress, moving_layers, prev_result_tuple
 
 
@@ -483,6 +483,7 @@ class JHeuristic(MapFunc):
     def select_the_best_perf_improv(self):
         max_perf_improv = -float("inf")
         self.pe_explore_scope = self.get_pe_explore_scope()
+
         for pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
             # print self.sum_of_perf_per_pe[pe]
             if self.sum_of_perf_per_pe[pe] > max_perf_improv:
