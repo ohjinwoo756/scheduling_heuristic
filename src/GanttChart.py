@@ -43,16 +43,25 @@ class GanttChart:
             # save as [layer_name or overhead, processor_name, start_time, end_time]
 
     def get_color_name(self, layer_name):
-        if layer_name.find("data") >= 0 or layer_name.find("front") >= 0:
-            return 'grey'
-        elif layer_name.find("conv") >= 0 or layer_name.find("c") >= 0: 
+        # classify apps by color (upto 4 apps supported)
+        if layer_name.find("app_0") >= 0:
             return 'gold'
-        elif layer_name.find("pool") >= 0 or layer_name.find("p") >= 0:
-            return 'lavender'
-        elif layer_name.find("ip") >= 0:
+        if layer_name.find("app_1") >= 0:
             return 'green'
-        else:
+        if layer_name.find("app_2") >= 0:
             return 'lightblue'
+        if layer_name.find("app_3") >= 0:
+            return 'grey'
+        # if layer_name.find("data") >= 0 or layer_name.find("front") >= 0:
+        #     return 'grey'
+        # elif layer_name.find("conv") >= 0 or layer_name.find("c") >= 0: 
+        #     return 'gold'
+        # elif layer_name.find("pool") >= 0 or layer_name.find("p") >= 0:
+        #     return 'lavender'
+        # elif layer_name.find("ip") >= 0:
+        #     return 'green'
+        # else:
+        #     return 'lightblue'
         
     def draw_gantt_chart(self):
         num_ylabels = len(self.ylabels)
