@@ -176,7 +176,9 @@ class SchedSimulator(object):
                 config.objs_result_by_app[idx].append(round(objs[idx][0], 2))
                 objs_result.append(round(objs[idx][0], 2))
 
-            config.file_name = "{}{}_{}_{}_{}_{}_{}_{}_{}_{}_{}".format(config.save_path + "/" + config.name, str(config.sched_method), str(config.hyper_parameter), str(config.processor), str(config.priority), str(config.period), str(config.cpu_config), str(config.objs), str(objs_result), str(config.csts), config.analyzer)
+            # XXX: for short file name
+            config.file_name = "{}{}_{}_{}_{}_{}".format(config.save_path + "/" + config.name, str(config.sched_method), str(config.processor), str(config.period), str(config.cpu_config), str(objs_result))
+            # config.file_name = "{}{}_{}_{}_{}_{}_{}_{}_{}".format(config.save_path + "/" + config.name, str(config.sched_method), str(config.processor), str(config.priority), str(config.period), str(config.cpu_config), str(config.objs), str(objs_result), str(config.csts))
             gantt.file_name = config.file_name + "#{}.png".format(config.gantt_chart_idx)
             gantt.draw_gantt_chart()
 
