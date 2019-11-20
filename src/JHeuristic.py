@@ -29,11 +29,10 @@ class JHeuristic(MapFunc):
         self.rank_of_pe = None
         self.rank_of_img_pe = None
         self.img_pe = list()
-        # self.pe_explore_scope = None # FIXME: deprecated
         self.num_of_img_pe = 0
 
-        # XXX: row = PE, col = App
-        # XXX: content = list [-1/1, absolute difference]
+        # row = PE, col = App
+        # content = [-1/1, absolute difference]
         self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
         self.sum_of_perf_per_pe = [0] * self.num_pe
         self.new_moving_layers = None
@@ -44,18 +43,17 @@ class JHeuristic(MapFunc):
 
 
     def do_schedule(self):
-        self.synthetic_heuristic()
-
+        self.heuristic()
         return self.solutions 
 
 
-    def synthetic_heuristic(self):
-        # XXX: apply PEFT to each application
+    def heuristic(self):
+        # apply PEFT to each application
         self.calculate_oct_and_rank_oct()
         temp_list = [[] for _ in range(self.num_pe)]
         for app_idx, app in enumerate(self.app_list):
             self.initialize_variables_for_peft()
-            self.peft_algorithm(app, len(app.layer_list), False)
+            self.peft_algorithm(app, len(app.layer_list))
 
             for pe in self.pe_list:
                 pe_idx = pe.get_idx()
@@ -65,12 +63,9 @@ class JHeuristic(MapFunc):
 
 
         if self.num_app == 1:
-            # apply PEFT to each application
             self.solutions.append(self.get_mappings()[0])
         else:
             self.rank_processors()
-            # self.initial_fb_mappings() # FIXME: deprecated
-            # self.initial_synthesis() # FIXME: deprecated
             self.peft_synthesis()
 
 
@@ -89,8 +84,6 @@ class JHeuristic(MapFunc):
                 self.optimistic_cost_table.append(oct_layer_row) # update table
                 layer.set_rank_oct(rank_oct)
 
-        # self.print_optimistic_cost_table()
-
 
     def compute_optimistic_cost(self, app, task, processor):
         if (task.name, processor.name) in self.optimistic_cost_hash:
@@ -104,7 +97,7 @@ class JHeuristic(MapFunc):
                 for successor in task.app.graph._graph[task]:
                     min_value = float('inf')
                     for pe in self.pe_list:
-                        # XXX: assign PE temporarily (this is for getting transition time below)
+                        # assign PE temporarily (this is for getting transition time below)
                         self.assign_processor(task, processor)
                         self.assign_processor(successor, pe)
                         self.assign_edge_type_between(task, successor)
@@ -129,12 +122,12 @@ class JHeuristic(MapFunc):
                 return optimistic_cost
 
 
-    # XXX: PAIR: initialize_assigned()
+    # PAIR: initialize_assigned()
     def assign_processor(self, layer, pe):
         layer.set_pe(pe)
 
 
-    # XXX: PAIR: initialize_edge_type_between()
+    # PAIR: initialize_edge_type_between()
     def assign_edge_type_between(self, task, successor):
         if task.pe == successor.pe:
             pass
@@ -152,20 +145,12 @@ class JHeuristic(MapFunc):
                 task.app.graph._edge[(task, successor)].gpu_npu_connection = True
 
 
-    def _assign_edge_type_from_priors_to(self, successor):
-        in_edges = list(successor.app.graph._in_edge[successor])
-        if in_edges != []:
-            for e in in_edges:
-                prior = e.sender
-                self.assign_edge_type_between(prior, successor)
-
-
-    # XXX: PAIR: assign_processor()
+    # PAIR: assign_processor()
     def initialize_assigned(self, layer):
         layer.set_pe(None)
 
 
-    # XXX: PAIR: assign_edge_type_between()
+    # PAIR: assign_edge_type_between()
     def initialize_edge_type_between(self, task, successor):
         task.app.graph._edge[(task, successor)].transition_flag = False 
         task.app.graph._edge[(task, successor)].cpu2gpu = False 
@@ -182,33 +167,30 @@ class JHeuristic(MapFunc):
         self.mapped_layers_per_pe = [[] for _ in range(self.num_pe)]
 
 
-    # DEPRECATED: target_app.layer_list[self.progress_by_app[target_app.priority-1]:coverage] will be processed
-    def peft_algorithm(self, target_app, coverage, is_modified=False):
+    def peft_algorithm(self, target_app, coverage):
         highest_rank_oct_layers, layers_rank_oct, ready_list = self._init_variables(target_app, coverage)
 
         while ready_list != []:
-            # TASK PRIORITIZATION PHASE 
+            # ---- TASK PRIORITIZATION PHASE ----
             highest_rank_oct_layer = ready_list[0]
             if highest_rank_oct_layer.is_start_node or highest_rank_oct_layer.is_end_node:
-                # XXX: if node is frontend or backend, only cpu processor can be mapped.
+                # if node is frontend or backend, only cpu processor can be mapped.
                 target_pe_list = self.pe_list[:len(config.cpu_config)] 
             else:
                 target_pe_list = self.pe_list 
 
-            # PROCESSOR SELECTION PHASE
+            # ---- PROCESSOR SELECTION PHASE ----
             min_oeft = float('inf')
             min_oeft_processor = None
             occupation_matrix = self._get_updated_occupation_matrix()
             for processor in target_pe_list:
                 oeft = self.compute_oeft(highest_rank_oct_layer, processor)
-                if is_modified:
-                    oeft += self.get_interference_from_pe(target_app, processor, occupation_matrix)
 
                 if oeft < min_oeft:
                     min_oeft_processor = processor
                     min_oeft = oeft
 
-            # UPDATING(APPLYING) PHASE
+            # ---- UPDATING(APPLYING) PHASE ----
             highest_rank_oct_layer.set_pe(min_oeft_processor)
             highest_rank_oct_layer.set_is_pe_mapped(True)
             self._assign_edge_type_from_priors_to(highest_rank_oct_layer)
@@ -220,7 +202,6 @@ class JHeuristic(MapFunc):
 
 
     def _init_variables(self, target_app, coverage):
-        # init highest_rank_oct_layers, layers_rank_oct
         highest_rank_oct_layers = list()
         layers_rank_oct = dict()
 
@@ -231,8 +212,7 @@ class JHeuristic(MapFunc):
             highest_rank_oct_layers.append(layer)
             layers_rank_oct[layer] = layer.get_rank_oct()
 
-        # init ready_list
-        # XXX: insert to ready_list, then extract from highest_rank_oct_layers
+        # initialize 
         ready_list = list()
         ready_list.append(coveraged_layer_list[0])
         highest_rank_oct_layers.remove(coveraged_layer_list[0])
@@ -240,6 +220,31 @@ class JHeuristic(MapFunc):
         self.progress_by_app[target_app.priority-1] += coverage
 
         return highest_rank_oct_layers, layers_rank_oct, ready_list
+
+
+    def _get_updated_occupation_matrix(self):
+        # ---- scheme of occupation matrix below ----
+        # row: PE
+        # column: App
+        # element: sum of execution time of app on PE
+
+        # init occupation matrix
+        occupation_matrix = list()
+        for pe_idx in range(self.num_pe):
+            occupation_matrix.append(list())
+            for _ in range(self.num_app):
+                occupation_matrix[pe_idx].append(float(0))
+
+        # update occupation matrix from erstwhile mapping
+        for pe_idx in range(self.num_pe):
+            layers = self.mapped_layers_per_pe[pe_idx]
+            for layer in layers:
+                for app_idx, app in enumerate(self.app_list):
+                    if layer.app == app:
+                        occupation_matrix[pe_idx][app_idx] += layer.time_list[pe_idx]
+                        break
+
+        return occupation_matrix
 
 
     def compute_oeft(self, layer, processor):
@@ -282,17 +287,94 @@ class JHeuristic(MapFunc):
         return max(pe_available_time, max_sum_aft_comm)
 
 
+    def _assign_edge_type_from_priors_to(self, successor):
+        in_edges = list(successor.app.graph._in_edge[successor])
+        if in_edges != []:
+            for e in in_edges:
+                prior = e.sender
+                self.assign_edge_type_between(prior, successor)
+
+
+    def update_pe_available_time_and_layer_finish_time(self, highest_rank_oct_layer, min_oeft_processor):
+        in_edges = list(highest_rank_oct_layer.app.graph._in_edge[highest_rank_oct_layer])
+
+        if in_edges == []:
+            self.processor_available_time_list[min_oeft_processor.idx] += \
+                    round(highest_rank_oct_layer.time_list[min_oeft_processor.idx], 2)
+            highest_rank_oct_layer.finish_time = self.processor_available_time_list[min_oeft_processor.idx]
+        else:
+            max_prior_finish_and_comm_time = -float('inf')
+            for e in in_edges:
+                self._update_pe_available_time_of_prior(e)
+                prior_finish_and_comm_time = e.sender.finish_time
+                if prior_finish_and_comm_time > max_prior_finish_and_comm_time:
+                    max_prior_finish_and_comm_time = prior_finish_and_comm_time
+
+            self.processor_available_time_list[min_oeft_processor.idx] = \
+                    max_prior_finish_and_comm_time + \
+                    round(highest_rank_oct_layer.time_list[min_oeft_processor.idx], 2)
+            highest_rank_oct_layer.finish_time = self.processor_available_time_list[min_oeft_processor.idx]
+
+
+    def _update_pe_available_time_of_prior(self, prior_edge):
+        prior = prior_edge.sender
+        self.processor_available_time_list[prior.pe.get_idx()] += prior_edge.calc_transition_time()
+        prior.finish_time = self.processor_available_time_list[prior.pe.get_idx()]
+
+
+    def update_ready_list_and_highest_rank_oct_layers(self, ready_list, layers_rank_oct, highest_rank_oct_layers):
+        del ready_list[0]
+
+        runnable_layers = self.extract_runnable_layers_from(highest_rank_oct_layers)
+        for l in runnable_layers:
+            ready_list.append(l)
+
+        ready_list = sorted(ready_list, key=layers_rank_oct.__getitem__, reverse=True)
+
+        for layer in runnable_layers:
+            highest_rank_oct_layers.remove(layer)
+
+
+    def extract_runnable_layers_from(self, highest_rank_oct_layers):
+        runnable_layers = list()
+        for layer in highest_rank_oct_layers:
+            is_runnable = True
+            if list(layer.app.graph._in_edge[layer]) != []:
+                for in_edges in list(layer.app.graph._in_edge[layer]):
+                    if not in_edges.sender.get_is_pe_mapped():
+                        is_runnable = False
+                        break
+            if is_runnable:
+                runnable_layers.append(layer)
+
+        return runnable_layers
+
+
+    # get all applications' layer mapping
+    def get_mappings(self):
+        mappings = [0] * len(self.layer_list)
+        idx = 0
+        for app in self.app_list:
+            for layer in app.layer_list:
+                mappings[idx] = layer.pe.get_idx()
+                idx = idx + 1
+
+        return [mappings]
+
+
+    # TODO too many comments.. fix function / variable name
     def rank_processors(self):
-        sample_app = self.app_list[0] # XXX: The type of app doesn't matter, it's just sample
+        sample_app = self.app_list[0]
         dict_pe_to_sum = dict()
         dict_img_pe_to_sum = dict()
 
-        # get sum of layer's execution time for each PE
+        # get summation of layer's execution time for each PE
         for p_idx, p in enumerate(self.pe_list):
             exec_sum = 0
-            # XXX: analyze all layer on the PE, not specific one layer
+
+            # analyze all layer on the PE, not specific one layer
             for l in sample_app.layer_list:
-                # XXX: because non-img-processor has very large execution time for frontend and backend layer
+                # XXX Exception because non-img-processor has very large execution time for frontend and backend layer
                 if not l.is_start_node and not l.is_end_node:
                     exec_sum += l.time_list[p_idx]
 
@@ -300,65 +382,16 @@ class JHeuristic(MapFunc):
             dict_pe_to_sum[p_idx] = exec_sum
 
             # rank image processors
-            # XXX: It should not be only about CPU, It's okay if the PE is image processor
             if p.get_type() == PEType.CPU:
                 dict_img_pe_to_sum[p_idx] = exec_sum
                 self.img_pe.append(p)
                 self.num_of_img_pe += 1
 
-        # sorted upward by sum
-        # XXX: index = rank, content = processor's index
+        # ------ sorted upward by sum ------
+        # list index    = rank
+        # content       = processor's index
 	self.rank_of_pe = sorted(dict_pe_to_sum, key=lambda k : dict_pe_to_sum[k])
 	self.rank_of_img_pe = sorted(dict_img_pe_to_sum, key=lambda k : dict_img_pe_to_sum[k])
-        # print self.rank_of_pe
-        # print self.rank_of_img_pe
-
-
-    # FIXME: deprecated
-    # def initial_fb_mappings(self):
-    #     for app_idx, app in enumerate(self.app_list):
-    #         moving_layers = [app.layer_list[0], app.layer_list[-1]]
-
-    #         if app_idx <= len(self.img_pe)-1:
-    #             target_img_pe = self.pe_list[self.rank_of_img_pe[app_idx]]
-    #             self.move_to(moving_layers, target_img_pe)
-    #         else:
-    #             min_rank_img_pe = self.pe_list[self.rank_of_img_pe[-1]]
-    #             self.move_to(moving_layers, min_rank_img_pe)
-
-
-    # FIXME: deprecated
-    # def initial_synthesis(self):
-    #     for a_idx, a in enumerate(self.app_list):
-    #         max_parallel = self.get_max_parallelism_of(a)
-    #         if max_parallel >= self.num_pe:
-    #             shrink_parallelism(a)
-
-
-    # FIXME: deprecated
-    # def get_max_parallelism_of(self, app):
-    #     max_parallel_of_app = 1
-    #     for l_idx , l in enumerate(app.layer_list):
-    #         max_parallel = 0
-    #         out_edges = l.app.graph._out_edge[l]
-    #         if len(out_edges) >= 2: # if parallel structure
-    #             mapped = []
-    #             for e in out_edges:
-    #                 rp = e.receiver.get_pe()
-    #                 if rp not in mapped:
-    #                     mapped.append(rp)
-    #                     max_parallel += 1
-    #         if max_parallel > max_parallel_of_app:
-    #             max_parallel_of_app = max_parallel
-
-    #     return max_parallel_of_app
-
-
-    # FIXME: deprecated
-    # def shrink_parallelism(self, app):
-    #     for l_idx, l in enumerate(app.layer_list):
-    #         if l.get_pe() == self.rank_of_pe[-1]:
-    #             l.set_pe(self.rank_of_pe[0])
 
 
     def peft_synthesis(self):
@@ -368,84 +401,28 @@ class JHeuristic(MapFunc):
 
         # move layers in apps from highest to lowest priority
         for app in self.app_list: 
-            progress = 1 # except for frontend layer
+            progress = 1 # frontend layer excluded
             while True:
                 self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
                 self.sum_of_perf_per_pe = [0] * self.num_pe
 
-                # XXX stopping condition 1
-                if progress == len(app.layer_list)-1: # except for backend layer
-                    # print "*************************"
-                    # print "[FULL PROGRESS] MOVE TO NEXT APPLICATION"
-                    # print "\tFINISH", app
-                    # print "\tPROGRESS: ",progress
+                if progress == len(app.layer_list)-1: # backend layer excluded
+                    # self.print_chunk_progress_with_messsage("[FULL PROGRESS] MOVE TO NEXT APPLICATION", progress, None)
                     break
 
                 chunk_unit_list = [1, 5, 10]
-                # chunk_unit_list = [7, 4, 1]
-                # chunk_unit_list = [7, 10, 15]
                 whether_go_to_next_app, progress, prev_result_tuple = \
                         self.test_on_chunk_unit_list(chunk_unit_list, app, progress, prev_result_tuple)
 
-                # XXX stopping condition 2
                 if whether_go_to_next_app:
                     break
 
 
-    # XXX IMPORTANT variables:
-    #   - self.perf_improv_per_app
-    #   - self.sum_of_perf_per_pe
-    def test_on_chunk_unit_list(self, chunk_unit_list, app, progress, prev_result_tuple):
-        whether_go_to_next_app = False
-
-        for chunk in chunk_unit_list:
-            temp_progress, temp_moving_layers = self.update_variables(app, chunk, progress)
-
-            # FIXME: deprecated
-            # self.pe_explore_scope = self.get_pe_explore_scope()
-            # for target_pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
-
-            for target_pe in self.rank_of_pe[:]:
-                self.calc_perf_improv_on_target_pe(app, temp_moving_layers, target_pe, prev_result_tuple)
-            max_perf_improv_pe = self.select_the_best_perf_improv_among_pe()
-
-            if not self.is_passable(max_perf_improv_pe):
-                if chunk == chunk_unit_list[-1]:
-                    # print "********************************"
-                    # print "[UNPASSABLE] move to NEXT APPLICATION"
-                    # print "\tPROGRESS: ", temp_progress
-                    # print "\tCHUNK: ", chunk
-                    whether_go_to_next_app = True
-                    return whether_go_to_next_app, None, prev_result_tuple
-                else:
-                    # print "********************************"
-                    # print "[UNPASSABLE] move to NEXT CHUNK UNIT"
-                    # print "\tPROGRESS: ", temp_progress
-                    # print "\tCHUNK: ", chunk
-                    self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
-                    self.sum_of_perf_per_pe = [0] * self.num_pe
-                    continue
-            else: # if passable, move layers 
-                progress = temp_progress # finalize progress
-                # moving_layers = temp_moving_layers # finalize moving layers
-
-                # XXX: if detination is among image processor, move frontend and backend layer too.
-                # if max_perf_improv_pe in self.img_pe:
-                #     moving_layers.append(app.layer_list[0])
-                #     moving_layers.append(app.layer_list[-1])
-
-                self.move_to(self.new_moving_layers, max_perf_improv_pe)
-                self.move_to(self.new_degrading_layers[max_perf_improv_pe.get_idx()], self.pe_list[self.degrading_pe[max_perf_improv_pe.get_idx()]])
-
-                new_mapping = copy.deepcopy(self.get_mappings()[0])
-
-                self.get_solution_if_schedulable(new_mapping)
-                prev_result_tuple = self.fitness.calculate_fitness(new_mapping)
-                # print "********************************"
-                # print "[PASSABLE] move to NEXT PROGRESS"
-                # print "\tPROGRESS: ", progress
-                # print "\tCHUNK: ", chunk
-                return whether_go_to_next_app, progress, prev_result_tuple
+    def print_chunk_progress_with_messsage(self, message, progress, chunk):
+        print "*************************"
+        print message
+        print "\tPROGRESS :", progress
+        print "\tCHUNK :", chunk
 
 
     def get_solution_if_schedulable(self, mapping):
@@ -464,7 +441,43 @@ class JHeuristic(MapFunc):
         return available_results
 
 
-    # XXX: frontend, backend layer is not considered
+    # XXX IMPORTANT variables:
+    #   - self.perf_improv_per_app
+    #   - self.sum_of_perf_per_pe
+    def test_on_chunk_unit_list(self, chunk_unit_list, app, progress, prev_result_tuple):
+        whether_go_to_next_app = False
+
+        for chunk in chunk_unit_list:
+            temp_progress, temp_moving_layers = self.update_variables(app, chunk, progress)
+
+            for target_pe in self.rank_of_pe[:]:
+                self.calc_perf_improv_on_target_pe(app, temp_moving_layers, target_pe, prev_result_tuple)
+            max_perf_improv_pe = self.select_the_best_perf_improv_among_pe()
+
+            if not self.is_passable(max_perf_improv_pe):
+                if chunk == chunk_unit_list[-1]:
+                    # self.print_chunk_progress_with_messsage("[UNPASSABLE] move to NEXT APPLICATION", temp_progress, chunk)
+                    whether_go_to_next_app = True
+                    return whether_go_to_next_app, None, prev_result_tuple
+                else:
+                    # self.print_chunk_progress_with_messsage("[UNPASSABLE] move to NEXT CHUNK UNIT", temp_progress, chunk)
+                    self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
+                    self.sum_of_perf_per_pe = [0] * self.num_pe
+                    continue
+            else:
+                progress = temp_progress # finalize progress
+                self.move_to(self.new_moving_layers, max_perf_improv_pe)
+                self.move_to(self.new_degrading_layers[max_perf_improv_pe.get_idx()], \
+                        self.pe_list[self.degrading_pe[max_perf_improv_pe.get_idx()]])
+                new_mapping = copy.deepcopy(self.get_mappings()[0])
+                self.get_solution_if_schedulable(new_mapping)
+                prev_result_tuple = self.fitness.calculate_fitness(new_mapping) # update previous result
+
+                # self.print_chunk_progress_with_messsage("[PASSABLE] move to NEXT PROGRESS", progress, chunk)
+                return whether_go_to_next_app, progress, prev_result_tuple
+
+
+    # frontend, backend excluded here
     def update_variables(self, app, chunk, progress):
         if progress + chunk > len(app.layer_list)-1:
             new_chunk = len(app.layer_list)-1 - progress
@@ -477,10 +490,56 @@ class JHeuristic(MapFunc):
         return progress, moving_layers
 
 
-    # FIXME: function deprecated
-    # def get_pe_explore_scope(self):
-    #     return self.num_app
-    #     # return self.num_pe-1
+    def calc_perf_improv_on_target_pe(self, app, moving_layers, target_pe, prev_result_tuple):
+        initial_mappings = copy.deepcopy(self.get_mappings()[0])
+        initial_mapped_layers_per_pe = self.deepcopy_list(self.mapped_layers_per_pe)
+
+        self.new_moving_layers = moving_layers
+        self.move_to(moving_layers, self.pe_list[target_pe])
+        # self.move_fb_if_img_pe(app, target_pe)
+
+        new_mapping = None
+        other_app_layers = self.get_other_app_in_target(app, target_pe)
+
+        if other_app_layers != []:
+            self.new_degrading_layers[target_pe] = other_app_layers[:]
+            # XXX return results of tuple for 3 cases
+            result_tuples_by_cases, result_mapping, moving_cases = self.degrade_other_layers_to(app, other_app_layers, target_pe)
+
+            # select the best case
+            max_perf_improv = -float("inf")
+            for case_idx, result in enumerate(result_tuples_by_cases):
+                if result == None:
+                    continue
+
+                sum_of_perf_improv, perf_improv = self.calculate_WCRT_on_each_app(result, prev_result_tuple)
+                if sum_of_perf_improv > max_perf_improv:
+                    new_mapping = result_mapping[case_idx][:]
+                    self.degrading_pe[target_pe] = moving_cases[case_idx]
+        else:
+            new_mapping = copy.deepcopy(self.get_mappings()[0])
+
+        result_tuple = self.fitness.calculate_fitness(new_mapping)
+        sum_of_perf_improv, perf_improv = self.calculate_WCRT_on_each_app(result_tuple, prev_result_tuple)
+        self.perf_improv_per_app[target_pe] = perf_improv
+        self.sum_of_perf_per_pe[target_pe] = sum_of_perf_improv
+
+        self.initialize_move(initial_mappings, initial_mapped_layers_per_pe)
+
+
+    def calculate_WCRT_on_each_app(self, result_tuple, prev_result_tuple):
+        sum_of_perf_improv = 0
+        perf_improv = list()
+
+        for app_idx, value in enumerate(result_tuple):
+            abs_diff = abs(value - prev_result_tuple[app_idx])
+            if value < prev_result_tuple[app_idx]:
+                perf_improv.append([1, abs_diff]) # performance increases
+            else:
+                perf_improv.append([-1, abs_diff]) # performance decreases
+            sum_of_perf_improv += perf_improv[app_idx][0] * perf_improv[app_idx][1]
+
+        return sum_of_perf_improv, perf_improv
 
 
     def deepcopy_list(self, mapped_layers_per_pe):
@@ -492,58 +551,6 @@ class JHeuristic(MapFunc):
         return initial_mapped_layers_per_pe
 
 
-    def calc_perf_improv_on_target_pe(self, app, moving_layers, target_pe, prev_result_tuple):
-        initial_mappings = copy.deepcopy(self.get_mappings()[0])
-        initial_mapped_layers_per_pe = self.deepcopy_list(self.mapped_layers_per_pe)
-
-        self.new_moving_layers = moving_layers
-        self.move_to(moving_layers, self.pe_list[target_pe])
-        self.move_fb_if_img_pe(app, target_pe)
-
-        new_mapping = None
-        other_app_layers = self.get_other_app_in_target(app, target_pe)
-
-        if other_app_layers != []:
-            self.new_degrading_layers[target_pe] = other_app_layers[:]
-            # XXX return results of tuple for 3 cases
-            result_tuples_by_cases, result_mapping, moving_cases = self.degrade_other_layers_to(app, other_app_layers, target_pe)
-
-            # XXX among cases, select the best one
-            max_perf_improv = -float("inf")
-            for case_idx, result in enumerate(result_tuples_by_cases):
-                if result == None:
-                    continue
-
-                sum_of_perf_improv = 0
-                perf_improv = list()
-                for app_idx, value in enumerate(result):
-                    abs_diff = abs(value - prev_result_tuple[app_idx])
-                    if value < prev_result_tuple[app_idx]:
-                        perf_improv.append([1, abs_diff/10]) # performance increases
-                    else:
-                        perf_improv.append([-1, abs_diff*10]) # performance decreases
-                    sum_of_perf_improv += perf_improv[app_idx][0] * perf_improv[app_idx][1]
-
-                if sum_of_perf_improv > max_perf_improv:
-                    new_mapping = result_mapping[case_idx][:]
-                    self.degrading_pe[target_pe] = moving_cases[case_idx]
-        else:
-            new_mapping = copy.deepcopy(self.get_mappings()[0])
-
-        result_tuple = self.fitness.calculate_fitness(new_mapping)
-        for app_idx, result in enumerate(result_tuple):
-            abs_diff = abs(result - prev_result_tuple[app_idx])
-            if result < prev_result_tuple[app_idx]:
-                self.perf_improv_per_app[target_pe][app_idx] = [1, abs_diff/10] # performance increases
-            else:
-                self.perf_improv_per_app[target_pe][app_idx] = [-1, abs_diff*10] # performance decreases
-            self.sum_of_perf_per_pe[target_pe] += self.perf_improv_per_app[target_pe][app_idx][0] * \
-                                    self.perf_improv_per_app[target_pe][app_idx][1]
-
-        # initialize moves
-        self.initialize_move(initial_mappings, initial_mapped_layers_per_pe)
-
-
     def move_to(self, moving_layers, processor):
         if moving_layers != None:
             for l in moving_layers:
@@ -553,7 +560,6 @@ class JHeuristic(MapFunc):
 
 
     def move_fb_if_img_pe(self, app, target_pe):
-        # if self.pe_list[target_pe].type == PEType.CPU:
         if self.pe_list[target_pe] in self.img_pe:
             moving_layers = [app.layer_list[0], app.layer_list[-1]]
             self.move_to(moving_layers, self.pe_list[target_pe])
@@ -574,20 +580,13 @@ class JHeuristic(MapFunc):
     def degrade_other_layers_to(self, app, other_app_layers, target_pe):
         result_tuples_by_cases = list()
         result_mapping = list()
-        faster_pe_idx = -1
-        slower_pe_idx = -1
-        for idx, pe in enumerate(self.rank_of_pe):
-            if pe == target_pe:
-                if idx-1 >= 0:
-                    faster_pe_idx = self.rank_of_pe[idx-1]
-                if idx+1 < self.num_pe:
-                    slower_pe_idx = self.rank_of_pe[idx+1]
-        moving_cases = [target_pe, faster_pe_idx, slower_pe_idx]
+        faster_pe_idx, slower_pe_idx, moving_cases = self.search_faster_slower_pe(target_pe)
 
-        # XXX mapping after primary moves and before degrading other app's layers
+        # mapping after primary moves and before degrading phase
         inter_mappings = copy.deepcopy(self.get_mappings()[0])
         inter_mapped_layers_per_pe = self.deepcopy_list(self.mapped_layers_per_pe)
 
+        # ------- DEGRADING PHASE -------
         # case 1: no change
         case_one_mapping = inter_mappings
         result_tuples_by_cases.append(self.fitness.calculate_fitness(case_one_mapping))
@@ -620,36 +619,18 @@ class JHeuristic(MapFunc):
         return result_tuples_by_cases, result_mapping, moving_cases
 
 
-    def select_the_best_perf_improv_among_pe(self):
-        max_perf_improv = -float("inf")
+    def search_faster_slower_pe(self, target_pe):
+        faster_pe_idx = -1
+        slower_pe_idx = -1
+        for idx, pe in enumerate(self.rank_of_pe):
+            if pe == target_pe:
+                if idx-1 >= 0:
+                    faster_pe_idx = self.rank_of_pe[idx-1]
+                if idx+1 < self.num_pe:
+                    slower_pe_idx = self.rank_of_pe[idx+1]
+        moving_cases = [target_pe, faster_pe_idx, slower_pe_idx]
 
-        # FIXME: deprecated
-        # self.pe_explore_scope = self.get_pe_explore_scope()
-        # for pe in self.rank_of_pe[1:1 + self.pe_explore_scope]:
-        for pe in self.rank_of_pe[:]:
-            # print self.sum_of_perf_per_pe[pe]
-            if self.sum_of_perf_per_pe[pe] > max_perf_improv:
-                max_perf_improv = self.sum_of_perf_per_pe[pe]
-                max_perf_improv_pe = self.pe_list[pe]
-        # print "-----------------------------"
-        return max_perf_improv_pe
-
-
-    def is_passable(self, max_perf_improv_pe):
-        # if any app performs better than before, it's passable. 
-        passable = False
-        for app_idx, app in enumerate(self.app_list):
-            if self.perf_improv_per_app[max_perf_improv_pe.get_idx()][app_idx][0] == 1:
-                passable = True
-        return passable
-
-
-    # FIXME: deprecated
-    # def get_mappings_of(self, moving_layers):
-    #     pe_list = list()
-    #     for l in moving_layers:
-    #         pe_list.append(l.get_pe())
-    #     return pe_list
+        return faster_pe_idx, slower_pe_idx, moving_cases
 
 
     def initialize_move(self, initial_mappings, initial_mapped_layers_per_pe):
@@ -661,117 +642,23 @@ class JHeuristic(MapFunc):
         self.mapped_layers_per_pe = self.deepcopy_list(initial_mapped_layers_per_pe)
 
 
-    def get_interference_from_pe(self, target_app, target_pe, occupation_matrix):
-        higher_interference = float(0)
-        lower_interference = float(0)
-        higher_interference_hyper_param = 1
-        lower_interference_hyper_param = 1
+    def select_the_best_perf_improv_among_pe(self):
+        max_perf_improv = -float("inf")
 
-        for app_idx, app_exec_time in enumerate(occupation_matrix[target_pe.get_idx()]):
-            app_priority = app_idx + 1
-            if target_app.priority > app_priority: # if there is higher priority app
-                higher_interference += app_exec_time
-            elif target_app.priority < app_priority: # if there is lower priority app 
-                lower_interference += app_exec_time
-            elif target_app.priority == app_priority:
-                continue
-
-        result = higher_interference * higher_interference_hyper_param + \
-                lower_interference * lower_interference_hyper_param
-
-        return result
+        for pe in self.rank_of_pe[:]:
+            if self.sum_of_perf_per_pe[pe] > max_perf_improv:
+                max_perf_improv = self.sum_of_perf_per_pe[pe]
+                max_perf_improv_pe = self.pe_list[pe]
+        return max_perf_improv_pe
 
 
-    def _get_updated_occupation_matrix(self):
-        # XXX: scheme of occupation matrix below
-        # row: PE
-        # column: App
-        # element: sum of execution time of app on PE
-
-        # init occupation matrix
-        occupation_matrix = list()
-        for pe_idx in range(self.num_pe):
-            occupation_matrix.append(list())
-            for _ in range(self.num_app):
-                occupation_matrix[pe_idx].append(float(0))
-
-        # update occupation matrix from erstwhile mapping
-        for pe_idx in range(self.num_pe):
-            layers = self.mapped_layers_per_pe[pe_idx]
-            for layer in layers:
-                for app_idx, app in enumerate(self.app_list):
-                    if layer.app == app:
-                        occupation_matrix[pe_idx][app_idx] += layer.time_list[pe_idx]
-                        break
-
-        return occupation_matrix
-
-
-    def update_ready_list_and_highest_rank_oct_layers(self, ready_list, layers_rank_oct, highest_rank_oct_layers):
-        del ready_list[0]
-
-        runnable_layers = self.extract_runnable_layers_from(highest_rank_oct_layers)
-        for l in runnable_layers: # insert runnable layers to ready_list
-            ready_list.append(l)
-
-        ready_list = sorted(ready_list, key=layers_rank_oct.__getitem__, reverse=True) # sort
-
-        for layer in runnable_layers:
-            highest_rank_oct_layers.remove(layer)
-
-
-    def extract_runnable_layers_from(self, highest_rank_oct_layers):
-        runnable_layers = list()
-        for layer in highest_rank_oct_layers:
-            is_runnable = True
-            if list(layer.app.graph._in_edge[layer]) != []:
-                for in_edges in list(layer.app.graph._in_edge[layer]):
-                    if not in_edges.sender.get_is_pe_mapped():
-                        is_runnable = False
-                        break
-            if is_runnable:
-                runnable_layers.append(layer)
-
-        return runnable_layers
-
-
-    def update_pe_available_time_and_layer_finish_time(self, highest_rank_oct_layer, min_oeft_processor):
-        in_edges = list(highest_rank_oct_layer.app.graph._in_edge[highest_rank_oct_layer])
-
-        if in_edges == []:
-            self.processor_available_time_list[min_oeft_processor.idx] += \
-                    round(highest_rank_oct_layer.time_list[min_oeft_processor.idx], 2)
-            highest_rank_oct_layer.finish_time = self.processor_available_time_list[min_oeft_processor.idx]
-        else:
-            max_prior_finish_and_comm_time = -float('inf')
-            for e in in_edges:
-                self._update_pe_available_time_of_prior(e)
-                prior_finish_and_comm_time = e.sender.finish_time
-                if prior_finish_and_comm_time > max_prior_finish_and_comm_time:
-                    max_prior_finish_and_comm_time = prior_finish_and_comm_time
-
-            self.processor_available_time_list[min_oeft_processor.idx] = \
-                    max_prior_finish_and_comm_time + \
-                    round(highest_rank_oct_layer.time_list[min_oeft_processor.idx], 2)
-            highest_rank_oct_layer.finish_time = self.processor_available_time_list[min_oeft_processor.idx]
-
-
-    def _update_pe_available_time_of_prior(self, prior_edge):
-        prior = prior_edge.sender
-        self.processor_available_time_list[prior.pe.get_idx()] += prior_edge.calc_transition_time()
-        prior.finish_time = self.processor_available_time_list[prior.pe.get_idx()]
-
-
-    # get whole layers' mapping in all application
-    def get_mappings(self):
-        mappings = [0] * len(self.layer_list)
-        idx = 0
-        for app in self.app_list:
-            for layer in app.layer_list:
-                mappings[idx] = layer.pe.get_idx()
-                idx = idx + 1
-
-        return [mappings]
+    def is_passable(self, max_perf_improv_pe):
+        passable = False
+        for app_idx, app in enumerate(self.app_list):
+            if self.perf_improv_per_app[max_perf_improv_pe.get_idx()][app_idx][0] == 1:
+                # if any app performs better than before, it's passable. 
+                passable = True
+        return passable
 
 
     def print_mapped_layers_on_each_pe(self):
