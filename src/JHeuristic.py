@@ -20,26 +20,26 @@ class JHeuristic(MapFunc):
         self.num_layer = len(self.layer_list)
         self.num_pe = len(pe_list)
         self.fitness = Fitness(app_list, pe_list)
-
         self.optimistic_cost_table = list()
         self.optimistic_cost_hash = dict() # for speed up
-
+        self.mapped_layers_per_pe_for_peft =    [[] for _ in range(self.num_pe)]
+        self.mapped_layers_per_pe_for_syn =     [[] for _ in range(self.num_pe)]
         self.progress_by_app = [0] * self.num_app
-
         self.rank_of_pe = None
         self.rank_of_img_pe = None
         self.img_pe = list()
         self.num_of_img_pe = 0
-
-        # row = PE, col = App
-        # content = [-1/1, absolute difference]
-        self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
-        self.sum_of_perf_per_pe = [0] * self.num_pe
-        self.new_moving_layers = None
-        self.new_degrading_layers = [None] * self.num_pe
-        self.degrading_pe = [-1] * self.num_pe
-
         self.solutions = []
+
+        # XXX IMPORTANT variables
+        self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)] \
+                # row = PE, col = App, content = [-1/1, absolute difference]
+        self.sum_of_perf_per_pe = [0] * self.num_pe
+        self.moving_layers = None
+        self.degrading_layers_per_pe = [None] * self.num_pe
+        self.degrading_pe = [-1] * self.num_pe
+        self.init_fb_pe = None
+        self.criteria = 0
 
 
     def do_schedule(self):
@@ -48,25 +48,24 @@ class JHeuristic(MapFunc):
 
 
     def heuristic(self):
-        # apply PEFT to each application
         self.calculate_oct_and_rank_oct()
-        temp_list = [[] for _ in range(self.num_pe)]
-        for app_idx, app in enumerate(self.app_list):
-            self.initialize_variables_for_peft()
-            self.peft_algorithm(app, len(app.layer_list))
-
-            for pe in self.pe_list:
-                pe_idx = pe.get_idx()
-                for l in self.mapped_layers_per_pe[pe_idx]:
-                    temp_list[pe_idx].append(l)
-        self.mapped_layers_per_pe = temp_list
-
-
         if self.num_app == 1:
-            self.solutions.append(self.get_mappings()[0])
+            self.initialize_variables_for_peft()
+            self.peft_algorithm(self.app_list[0], len(self.app_list[0].layer_list))
+            self.solutions.append(list(self.get_mappings()[0]))
         else:
+            for app in self.app_list:
+                self.initialize_variables_for_peft()
+                self.peft_algorithm(app, len(app.layer_list))
+                self.update_mapped_layers_per_pe_for_syn()
             self.rank_processors()
             self.peft_synthesis()
+
+
+    def update_mapped_layers_per_pe_for_syn(self):
+        for pe in self.pe_list:
+            for l in list(self.mapped_layers_per_pe_for_peft[pe.get_idx()]):
+                self.mapped_layers_per_pe_for_syn[pe.get_idx()].append(l)
 
 
     def calculate_oct_and_rank_oct(self):
@@ -164,7 +163,7 @@ class JHeuristic(MapFunc):
         for layer in self.layer_list:
             layer.finish_time = 0
         self.processor_available_time_list = [0] * self.num_pe
-        self.mapped_layers_per_pe = [[] for _ in range(self.num_pe)]
+        self.mapped_layers_per_pe_for_peft = [[] for _ in range(self.num_pe)]
 
 
     def peft_algorithm(self, target_app, coverage):
@@ -197,7 +196,7 @@ class JHeuristic(MapFunc):
             
             self.update_pe_available_time_and_layer_finish_time(highest_rank_oct_layer, min_oeft_processor)
 
-            self.mapped_layers_per_pe[min_oeft_processor.get_idx()].append(highest_rank_oct_layer)
+            self.mapped_layers_per_pe_for_peft[min_oeft_processor.get_idx()].append(highest_rank_oct_layer)
             self.update_ready_list_and_highest_rank_oct_layers(ready_list, layers_rank_oct, highest_rank_oct_layers)
 
 
@@ -237,7 +236,7 @@ class JHeuristic(MapFunc):
 
         # update occupation matrix from erstwhile mapping
         for pe_idx in range(self.num_pe):
-            layers = self.mapped_layers_per_pe[pe_idx]
+            layers = self.mapped_layers_per_pe_for_peft[pe_idx]
             for layer in layers:
                 for app_idx, app in enumerate(self.app_list):
                     if layer.app == app:
@@ -362,60 +361,71 @@ class JHeuristic(MapFunc):
         return [mappings]
 
 
-    # TODO too many comments.. fix function / variable name
     def rank_processors(self):
         sample_app = self.app_list[0]
         dict_pe_to_sum = dict()
         dict_img_pe_to_sum = dict()
 
-        # get summation of layer's execution time for each PE
+        # XXX PEs will be ranked by sum of the layers' exec time on the PE, not specific layer
         for p_idx, p in enumerate(self.pe_list):
-            exec_sum = 0
-
-            # analyze all layer on the PE, not specific one layer
+            exec_sum_on_pe = 0
             for l in sample_app.layer_list:
-                # XXX Exception because non-img-processor has very large execution time for frontend and backend layer
+                # XXX very big execution time for frontend and backend layer on non-img PE
                 if not l.is_start_node and not l.is_end_node:
-                    exec_sum += l.time_list[p_idx]
+                    exec_sum_on_pe += l.time_list[p_idx]
 
-            # processors will be ranked by execution sum
-            dict_pe_to_sum[p_idx] = exec_sum
-
-            # rank image processors
+            dict_pe_to_sum[p_idx] = exec_sum_on_pe
             if p.get_type() == PEType.CPU:
-                dict_img_pe_to_sum[p_idx] = exec_sum
+                dict_img_pe_to_sum[p_idx] = exec_sum_on_pe
                 self.img_pe.append(p)
                 self.num_of_img_pe += 1
 
-        # ------ sorted upward by sum ------
+        # ------ sorted 'upward' by sum ------
         # list index    = rank
         # content       = processor's index
 	self.rank_of_pe = sorted(dict_pe_to_sum, key=lambda k : dict_pe_to_sum[k])
 	self.rank_of_img_pe = sorted(dict_img_pe_to_sum, key=lambda k : dict_img_pe_to_sum[k])
 
 
-    def peft_synthesis(self):
-        initial_mapping = copy.deepcopy(self.get_mappings()[0])
-        self.get_solution_if_schedulable(initial_mapping)
-        prev_result_tuple = self.fitness.calculate_fitness(initial_mapping)
+    def naive_synthesis(self):
+        self.get_solution_if_schedulable(list(self.get_mappings()[0][:]))
+        prev_result_tuple = list(self.fitness.calculate_fitness(list(self.get_mappings()[0])))
+        return prev_result_tuple
 
-        # move layers in apps from highest to lowest priority
+
+    def peft_synthesis(self):
+        # get naive concatenation of PEFTs for solution and update previous result
+        prev_result_tuple = self.naive_synthesis()
+        if len(self.rank_of_pe) != len(self.rank_of_img_pe):
+            prev_result_tuple = self.initial_fb_mapping()
+
+        # move layers in apps from highest to lowest priority, following graph dependency
         for app in self.app_list: 
+            self.criteria = 0
+            self.init_fb_pe = None
             progress = 1 # frontend layer excluded
             while True:
-                self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
-                self.sum_of_perf_per_pe = [0] * self.num_pe
-
                 if progress == len(app.layer_list)-1: # backend layer excluded
-                    # self.print_chunk_progress_with_messsage("[FULL PROGRESS] MOVE TO NEXT APPLICATION", progress, None)
+                    self.print_chunk_progress_with_messsage("[FULL PROGRESS] MOVE TO NEXT APPLICATION", progress, None)
                     break
 
-                chunk_unit_list = [1, 5, 10]
+                # chunk_unit_list = [1, 5, 10]
+                chunk_unit_list = self.construct_chunk_unit_list(app)
                 whether_go_to_next_app, progress, prev_result_tuple = \
                         self.test_on_chunk_unit_list(chunk_unit_list, app, progress, prev_result_tuple)
 
                 if whether_go_to_next_app:
                     break
+
+
+    def construct_chunk_unit_list(self, app):
+        chunk_unit_list = list()
+        cnt = 5
+        chunk_interval = len(app.layer_list) / cnt
+        for i in range(0, cnt):
+            chunk_unit_list.append(1 + chunk_interval * i)
+
+        return chunk_unit_list[:]
 
 
     def print_chunk_progress_with_messsage(self, message, progress, chunk):
@@ -441,40 +451,73 @@ class JHeuristic(MapFunc):
         return available_results
 
 
-    # XXX IMPORTANT variables:
-    #   - self.perf_improv_per_app
-    #   - self.sum_of_perf_per_pe
     def test_on_chunk_unit_list(self, chunk_unit_list, app, progress, prev_result_tuple):
         whether_go_to_next_app = False
 
+        # original mapping information
+        initial_mappings = list(self.get_mappings()[0])
+        initial_mapped_layers_per_pe = self.deepcopy_list(self.mapped_layers_per_pe_for_syn)
+
         for chunk in chunk_unit_list:
+            print "chunk:", chunk
             temp_progress, temp_moving_layers = self.update_variables(app, chunk, progress)
 
-            for target_pe in self.rank_of_pe[:]:
-                self.calc_perf_improv_on_target_pe(app, temp_moving_layers, target_pe, prev_result_tuple)
+            # XXX simulate chunk moves to each PE
+            for target_pe in self.rank_of_pe[1:]:
+                self.calc_perf_improv_on_target_pe(app, temp_moving_layers, target_pe, prev_result_tuple, \
+                        initial_mappings[:], initial_mapped_layers_per_pe)
+
+            # XXX at this point, 
+            #   self.perf_improv_per_app
+            #   self.sum_of_perf_per_pe 
+            # updated for all PEs
+            self.print_perf_improv_info()
+
             max_perf_improv_pe = self.select_the_best_perf_improv_among_pe()
+            print "max_perf_improv_pe:", max_perf_improv_pe.name
 
             if not self.is_passable(max_perf_improv_pe):
                 if chunk == chunk_unit_list[-1]:
-                    # self.print_chunk_progress_with_messsage("[UNPASSABLE] move to NEXT APPLICATION", temp_progress, chunk)
+                    self.print_chunk_progress_with_messsage("[UNPASSABLE] move to NEXT APPLICATION", temp_progress, chunk)
                     whether_go_to_next_app = True
                     return whether_go_to_next_app, None, prev_result_tuple
                 else:
-                    # self.print_chunk_progress_with_messsage("[UNPASSABLE] move to NEXT CHUNK UNIT", temp_progress, chunk)
-                    self.perf_improv_per_app = [[0] * self.num_app for _ in range(self.num_pe)]
-                    self.sum_of_perf_per_pe = [0] * self.num_pe
+                    self.print_chunk_progress_with_messsage("[UNPASSABLE] move to NEXT CHUNK UNIT", temp_progress, chunk)
                     continue
             else:
                 progress = temp_progress # finalize progress
-                self.move_to(self.new_moving_layers, max_perf_improv_pe)
-                self.move_to(self.new_degrading_layers[max_perf_improv_pe.get_idx()], \
-                        self.pe_list[self.degrading_pe[max_perf_improv_pe.get_idx()]])
-                new_mapping = copy.deepcopy(self.get_mappings()[0])
-                self.get_solution_if_schedulable(new_mapping)
-                prev_result_tuple = self.fitness.calculate_fitness(new_mapping) # update previous result
 
-                # self.print_chunk_progress_with_messsage("[PASSABLE] move to NEXT PROGRESS", progress, chunk)
+                self.move_to(self.moving_layers, max_perf_improv_pe)
+                # if degrading layers are None, nothing happens
+                self.move_to(self.degrading_layers_per_pe[max_perf_improv_pe.get_idx()], \
+                        self.pe_list[self.degrading_pe[max_perf_improv_pe.get_idx()]])
+
+                new_mapping = list(self.get_mappings()[0])
+                self.get_solution_if_schedulable(new_mapping)
+                # if self.is_schedulable(new_mapping):
+                prev_result_tuple = self.fitness.calculate_fitness(new_mapping[:]) # update previous result
+
+                self.print_chunk_progress_with_messsage("[PASSABLE] move to NEXT PROGRESS", progress, chunk)
+                if self.criteria == 0:
+                    self.init_fb_pe = max_perf_improv_pe
+                self.criteria = 1
                 return whether_go_to_next_app, progress, prev_result_tuple
+
+
+    def initial_fb_mapping(self):
+        for app_idx, app in enumerate(self.app_list):
+            moving_layers = [app.layer_list[0], app.layer_list[-1]]
+
+            if app_idx < len(self.img_pe):
+                target_img_pe = self.pe_list[self.rank_of_img_pe[app_idx]]
+                self.move_to(moving_layers, target_img_pe)
+            else:
+                min_rank_img_pe = self.pe_list[self.rank_of_img_pe[-1]] # the slowest img PE
+                self.move_to(moving_layers, min_rank_img_pe)
+
+        self.get_solution_if_schedulable(list(self.get_mappings()[0][:]))
+        prev_result_tuple = list(self.fitness.calculate_fitness(list(self.get_mappings()[0])))
+        return prev_result_tuple
 
 
     # frontend, backend excluded here
@@ -490,56 +533,84 @@ class JHeuristic(MapFunc):
         return progress, moving_layers
 
 
-    def calc_perf_improv_on_target_pe(self, app, moving_layers, target_pe, prev_result_tuple):
-        initial_mappings = copy.deepcopy(self.get_mappings()[0])
-        initial_mapped_layers_per_pe = self.deepcopy_list(self.mapped_layers_per_pe)
-
-        self.new_moving_layers = moving_layers
-        self.move_to(moving_layers, self.pe_list[target_pe])
-        # self.move_fb_if_img_pe(app, target_pe)
-
-        new_mapping = None
+    # XXX
+    # 1. get self.moving_layers, self.degrading_layers_per_pe[target_pe], self.degrading_pe[target_pe]
+    # 2. update self.perf_improv_per_app[target_pe], self.sum_of_perf_per_pe[target_pe]
+    def calc_perf_improv_on_target_pe(self, app, moving_layers, target_pe, prev_result_tuple, initial_mappings, initial_mapped_layers_per_pe):
+        self.moving_layers = moving_layers                                   # XXX IMPORTANT
         other_app_layers = self.get_other_app_in_target(app, target_pe)
 
+        new_mapping_on_target_pe = None # XXX after if-else, it is updated.
+
         if other_app_layers != []:
-            self.new_degrading_layers[target_pe] = other_app_layers[:]
+            self.degrading_layers_per_pe[target_pe] = other_app_layers              # XXX IMPORTANT
             # XXX return results of tuple for 3 cases
-            result_tuples_by_cases, result_mapping, moving_cases = self.degrade_other_layers_to(app, other_app_layers, target_pe)
+            # case order: no change | move to faster PE | move to slower PE
+            result_tuples_by_cases, result_mapping, pe_idx_per_cases = self.degrade_other_layers_to(app, target_pe, \
+                    initial_mappings[:], initial_mapped_layers_per_pe)
 
             # select the best case
             max_perf_improv = -float("inf")
             for case_idx, result in enumerate(result_tuples_by_cases):
                 if result == None:
                     continue
-
-                sum_of_perf_improv, perf_improv = self.calculate_WCRT_on_each_app(result, prev_result_tuple)
+                sum_of_perf_improv, perf_improv = self.calculate_WCRT_diff_on_each_app(result, prev_result_tuple, target_pe)
                 if sum_of_perf_improv > max_perf_improv:
-                    new_mapping = result_mapping[case_idx][:]
-                    self.degrading_pe[target_pe] = moving_cases[case_idx]
+                    max_perf_improv = sum_of_perf_improv
+                    new_mapping_on_target_pe = result_mapping[case_idx][:]
+                    self.degrading_pe[target_pe] = pe_idx_per_cases[case_idx]       # XXX IMPORTANT
+
         else:
-            new_mapping = copy.deepcopy(self.get_mappings()[0])
+            self.degrading_layers_per_pe[target_pe] = None                             # XXX IMPORTANT
+            self.degrading_pe[target_pe] = -1                                   # XXX IMPORTANT
+            self.move_to(self.moving_layers, self.pe_list[target_pe])
+            # self.move_fb_if_img_pe(app, target_pe)
+            if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+                if self.init_fb_pe == None:
+                    self.move_fb(app, target_pe)
+                else:
+                    self.move_fb(app, self.init_fb_pe.get_idx())
 
-        result_tuple = self.fitness.calculate_fitness(new_mapping)
-        sum_of_perf_improv, perf_improv = self.calculate_WCRT_on_each_app(result_tuple, prev_result_tuple)
-        self.perf_improv_per_app[target_pe] = perf_improv
-        self.sum_of_perf_per_pe[target_pe] = sum_of_perf_improv
+            new_mapping_on_target_pe = list(self.get_mappings()[0])
+            self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
 
-        self.initialize_move(initial_mappings, initial_mapped_layers_per_pe)
+        result_tuple = self.fitness.calculate_fitness(new_mapping_on_target_pe[:]) # XXX HERE!!!!!!!!!
+        self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
+        sum_of_perf_improv, perf_improv = self.calculate_WCRT_diff_on_each_app(result_tuple, prev_result_tuple, target_pe)
+        self.perf_improv_per_app[target_pe] = perf_improv[:]                    # XXX IMPORTANT
+        self.sum_of_perf_per_pe[target_pe] = sum_of_perf_improv                 # XXX IMPORTANT
 
 
-    def calculate_WCRT_on_each_app(self, result_tuple, prev_result_tuple):
+    def calculate_WCRT_diff_on_each_app(self, result_tuple, prev_result_tuple, target_pe):
+        # target_pe_weight = self.get_target_pe_weight(target_pe)
+        target_pe_weight = 1
+
         sum_of_perf_improv = 0
         perf_improv = list()
-
         for app_idx, value in enumerate(result_tuple):
             abs_diff = abs(value - prev_result_tuple[app_idx])
             if value < prev_result_tuple[app_idx]:
+                abs_diff = abs_diff * target_pe_weight
                 perf_improv.append([1, abs_diff]) # performance increases
             else:
+                abs_diff = abs_diff / target_pe_weight
                 perf_improv.append([-1, abs_diff]) # performance decreases
             sum_of_perf_improv += perf_improv[app_idx][0] * perf_improv[app_idx][1]
 
-        return sum_of_perf_improv, perf_improv
+        return sum_of_perf_improv, perf_improv[:]
+
+
+    def get_target_pe_weight(self, target_pe):
+        weight = 1.0
+        offset = 2
+        rank_of_pe_asc = self.rank_of_pe[1:]
+        rank_of_pe_asc.reverse()
+        for pe_idx in rank_of_pe_asc:
+            if target_pe != pe_idx:
+                weight = weight * offset
+            else:
+                break
+        return weight
 
 
     def deepcopy_list(self, mapped_layers_per_pe):
@@ -554,8 +625,8 @@ class JHeuristic(MapFunc):
     def move_to(self, moving_layers, processor):
         if moving_layers != None:
             for l in moving_layers:
-                self.mapped_layers_per_pe[l.pe.get_idx()].remove(l)
-                self.mapped_layers_per_pe[processor.get_idx()].append(l)
+                self.mapped_layers_per_pe_for_syn[l.pe.get_idx()].remove(l)
+                self.mapped_layers_per_pe_for_syn[processor.get_idx()].append(l)
                 self.assign_processor(l, processor)
 
 
@@ -563,60 +634,109 @@ class JHeuristic(MapFunc):
         if self.pe_list[target_pe] in self.img_pe:
             moving_layers = [app.layer_list[0], app.layer_list[-1]]
             self.move_to(moving_layers, self.pe_list[target_pe])
-            self.new_moving_layers.append(app.layer_list[0])
-            self.new_moving_layers.append(app.layer_list[-1])
+            for l in moving_layers:
+                if l not in self.moving_layers:
+                    self.moving_layers.append(l)
         else:
             pass
 
 
+    def move_fb(self, app, target_pe):
+        moving_layers = [app.layer_list[0], app.layer_list[-1]]
+        self.move_to(moving_layers, self.pe_list[target_pe])
+        for l in moving_layers:
+            if l not in self.moving_layers:
+                self.moving_layers.append(l)
+
+
     def get_other_app_in_target(self, app, target_pe):
         other_app_layers = []
-        for layer in self.mapped_layers_per_pe[target_pe]:
+        for layer in self.mapped_layers_per_pe_for_syn[target_pe]:
             if app.get_priority() < layer.app.get_priority():
                 other_app_layers.append(layer)
-        return other_app_layers
+        return other_app_layers[:]
 
 
-    def degrade_other_layers_to(self, app, other_app_layers, target_pe):
+    # XXX actual moving and initialization occur here !!
+    def degrade_other_layers_to(self, app, target_pe, initial_mappings, initial_mapped_layers_per_pe):
         result_tuples_by_cases = list()
-        result_mapping = list()
-        faster_pe_idx, slower_pe_idx, moving_cases = self.search_faster_slower_pe(target_pe)
+        result_mapping_by_cases = list()
+        faster_pe_idx, slower_pe_idx, pe_idx_per_cases = self.search_faster_slower_pe(target_pe)
 
-        # mapping after primary moves and before degrading phase
-        inter_mappings = copy.deepcopy(self.get_mappings()[0])
-        inter_mapped_layers_per_pe = self.deepcopy_list(self.mapped_layers_per_pe)
+        # if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+        #     self.move_to(self.moving_layers, self.pe_list[target_pe])
+        #     if self.init_fb_pe == None:
+        #         self.move_fb(app, target_pe)
+        #     else:
+        #         self.move_fb(app, self.init_fb_pe.get_idx())
+        #     self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[self.rank_of_img_pe[0]])
 
-        # ------- DEGRADING PHASE -------
-        # case 1: no change
-        case_one_mapping = inter_mappings
-        result_tuples_by_cases.append(self.fitness.calculate_fitness(case_one_mapping))
+        #     case_only_cpu_mapping = list(self.get_mappings()[0])
+        #     result_tuples_by_cases.append(self.fitness.calculate_fitness(case_only_cpu_mapping[:]))
+        #     result_mapping_by_cases.append(case_only_cpu_mapping[:])
+        #     self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
+
+        #     return result_tuples_by_cases[:], result_mapping_by_cases, pe_idx_per_cases[:]
+        # else:
+
+        # ------- DEGRADING CASE 1 : no change -------
+        self.move_to(self.moving_layers, self.pe_list[target_pe])
+        # self.move_fb_if_img_pe(app, target_pe)
+        if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+            if self.init_fb_pe == None:
+                self.move_fb(app, target_pe)
+            else:
+                self.move_fb(app, self.init_fb_pe.get_idx())
+
+        case_one_mapping = list(self.get_mappings()[0])
+        result_tuples_by_cases.append(self.fitness.calculate_fitness(case_one_mapping[:]))
         # result_tuples_by_cases.append([99999999] * self.num_app)
-        result_mapping.append(case_one_mapping)
+        result_mapping_by_cases.append(case_one_mapping[:])
+        self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
 
-        # case 2: move to faster PE
+
+        # ------- DEGRADING CASE 2 : move to faster PE -------
         if faster_pe_idx != -1:
-            self.move_to(other_app_layers, self.pe_list[faster_pe_idx])
-            case_two_mapping = copy.deepcopy(self.get_mappings()[0])
-            result_tuples_by_cases.append(self.fitness.calculate_fitness(case_two_mapping))
+            self.move_to(self.moving_layers, self.pe_list[target_pe])
+            # self.move_fb_if_img_pe(app, target_pe)
+            if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+                if self.init_fb_pe == None:
+                    self.move_fb(app, target_pe)
+                else:
+                    self.move_fb(app, self.init_fb_pe.get_idx())
+            self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[faster_pe_idx])
+
+            case_two_mapping = list(self.get_mappings()[0])
+            result_tuples_by_cases.append(self.fitness.calculate_fitness(case_two_mapping[:]))
             # result_tuples_by_cases.append([99999999] * self.num_app)
-            result_mapping.append(case_two_mapping)
-            self.initialize_move(inter_mappings, inter_mapped_layers_per_pe)
+            result_mapping_by_cases.append(case_two_mapping[:])
+            self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
         else:
             result_tuples_by_cases.append(None)
-            result_mapping.append(None)
+            result_mapping_by_cases.append(None)
 
-        # case 3: move to slower PE
+
+        # ------- DEGRADING CASE 3 : move to slower PE -------
         if slower_pe_idx != -1:
-            self.move_to(other_app_layers, self.pe_list[slower_pe_idx])
-            case_three_mapping = copy.deepcopy(self.get_mappings()[0])
-            result_tuples_by_cases.append(self.fitness.calculate_fitness(case_three_mapping))
-            result_mapping.append(case_three_mapping)
-            self.initialize_move(inter_mappings, inter_mapped_layers_per_pe)
+            self.move_to(self.moving_layers, self.pe_list[target_pe])
+            # self.move_fb_if_img_pe(app, target_pe)
+            if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+                if self.init_fb_pe == None:
+                    self.move_fb(app, target_pe)
+                else:
+                    self.move_fb(app, self.init_fb_pe.get_idx())
+            self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[slower_pe_idx])
+
+            case_three_mapping = list(self.get_mappings()[0])
+            result_tuples_by_cases.append(self.fitness.calculate_fitness(case_three_mapping[:]))
+            # result_tuples_by_cases.append([99999999] * self.num_app)
+            result_mapping_by_cases.append(case_three_mapping[:])
+            self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
         else:
             result_tuples_by_cases.append(None)
-            result_mapping.append(None)
+            result_mapping_by_cases.append(None)
 
-        return result_tuples_by_cases, result_mapping, moving_cases
+        return result_tuples_by_cases[:], result_mapping_by_cases, pe_idx_per_cases[:]
 
 
     def search_faster_slower_pe(self, target_pe):
@@ -628,9 +748,9 @@ class JHeuristic(MapFunc):
                     faster_pe_idx = self.rank_of_pe[idx-1]
                 if idx+1 < self.num_pe:
                     slower_pe_idx = self.rank_of_pe[idx+1]
-        moving_cases = [target_pe, faster_pe_idx, slower_pe_idx]
+        pe_idx_per_cases = [target_pe, faster_pe_idx, slower_pe_idx]
 
-        return faster_pe_idx, slower_pe_idx, moving_cases
+        return faster_pe_idx, slower_pe_idx, pe_idx_per_cases 
 
 
     def initialize_move(self, initial_mappings, initial_mapped_layers_per_pe):
@@ -639,15 +759,14 @@ class JHeuristic(MapFunc):
             for l in app.layer_list:
                 self.assign_processor(l, self.pe_list[initial_mappings[l_idx]])
                 l_idx += 1
-        self.mapped_layers_per_pe = self.deepcopy_list(initial_mapped_layers_per_pe)
+        self.mapped_layers_per_pe_for_syn = self.deepcopy_list(initial_mapped_layers_per_pe)
 
 
     def select_the_best_perf_improv_among_pe(self):
         max_perf_improv = -float("inf")
-
-        for pe in self.rank_of_pe[:]:
+        for pe in self.rank_of_pe[1:]:
             if self.sum_of_perf_per_pe[pe] > max_perf_improv:
-                max_perf_improv = self.sum_of_perf_per_pe[pe]
+                max_perf_improv = copy.deepcopy(self.sum_of_perf_per_pe[pe])
                 max_perf_improv_pe = self.pe_list[pe]
         return max_perf_improv_pe
 
@@ -661,19 +780,19 @@ class JHeuristic(MapFunc):
         return passable
 
 
-    def print_mapped_layers_on_each_pe(self):
+    def print_mapped_layers_on_each_pe_for_peft(self):
         for i in range(self.num_pe):
             temp = []
-            for l in self.mapped_layers_per_pe[i]:
+            for l in self.mapped_layers_per_pe_for_peft[i]:
                 temp.append(l.index)
             print temp
         print ""
 
 
-    def print_initial(self, initial_mapped_layers_per_pe):
+    def print_mapped_layers_on_each_pe_for_syn(self):
         for i in range(self.num_pe):
             temp = []
-            for l in initial_mapped_layers_per_pe[i]:
+            for l in self.mapped_layers_per_pe_for_syn[i]:
                 temp.append(l.index)
             print temp
         print ""
@@ -685,5 +804,21 @@ class JHeuristic(MapFunc):
             for layer in app.layer_list:
                 print self.optimistic_cost_table[table_row_idx]
                 table_row_idx = table_row_idx + 1
+
+
+    def print_initial(self, initial_mapped_layers_per_pe):
+        for i in range(self.num_pe):
+            temp = []
+            for l in initial_mapped_layers_per_pe[i]:
+                temp.append(l.index)
+            print temp
+        print ""
+
+
+    def print_perf_improv_info(self):
+        for pe_idx, _ in enumerate(self.pe_list):
+            if pe_idx == self.rank_of_pe[0]:
+                continue
+            print "pe idx:", pe_idx, "| perf per app:", self.perf_improv_per_app[pe_idx], "| sum of perfs:", self.sum_of_perf_per_pe[pe_idx]
 
 
