@@ -419,11 +419,9 @@ class JHeuristic(MapFunc):
 
 
     def construct_chunk_unit_list(self, app):
-        chunk_unit_list = list()
-        cnt = 5
-        chunk_interval = len(app.layer_list) / cnt
-        for i in range(0, cnt):
-            chunk_unit_list.append(1 + chunk_interval * i)
+        chunk_unit_list = [1, 5, 10]
+        chunk_unit_list.append(len(app.layer_list) / 2)
+        chunk_unit_list.append(len(app.layer_list))
 
         return chunk_unit_list[:]
 
