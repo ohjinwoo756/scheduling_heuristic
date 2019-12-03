@@ -453,6 +453,7 @@ class JHeuristic(MapFunc):
         whether_go_to_next_app = False
 
         # original mapping information
+        print self.get_mappings()[0]
         initial_mappings = list(self.get_mappings()[0])
         initial_mapped_layers_per_pe = self.deepcopy_list(self.mapped_layers_per_pe_for_syn)
 
@@ -556,7 +557,10 @@ class JHeuristic(MapFunc):
                 if sum_of_perf_improv > max_perf_improv:
                     max_perf_improv = sum_of_perf_improv
                     new_mapping_on_target_pe = result_mapping[case_idx][:]
-                    self.degrading_pe[target_pe] = pe_idx_per_cases[case_idx]       # XXX IMPORTANT
+                    if len(self.rank_of_pe) != len(self.rank_of_img_pe):
+                        self.degrading_pe[target_pe] = pe_idx_per_cases[case_idx]       # XXX IMPORTANT
+                    else:
+                        self.degrading_pe[target_pe] = self.rank_of_img_pe[0]       # XXX IMPORTANT
 
         else:
             self.degrading_layers_per_pe[target_pe] = None                             # XXX IMPORTANT
@@ -572,7 +576,7 @@ class JHeuristic(MapFunc):
             new_mapping_on_target_pe = list(self.get_mappings()[0])
             self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
 
-        result_tuple = self.fitness.calculate_fitness(new_mapping_on_target_pe[:]) # XXX HERE!!!!!!!!!
+        result_tuple = self.fitness.calculate_fitness(new_mapping_on_target_pe[:])
         self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
         sum_of_perf_improv, perf_improv = self.calculate_WCRT_diff_on_each_app(result_tuple, prev_result_tuple, target_pe)
         self.perf_improv_per_app[target_pe] = perf_improv[:]                    # XXX IMPORTANT
@@ -661,40 +665,22 @@ class JHeuristic(MapFunc):
         result_mapping_by_cases = list()
         faster_pe_idx, slower_pe_idx, pe_idx_per_cases = self.search_faster_slower_pe(target_pe)
 
-        # if len(self.rank_of_pe) == len(self.rank_of_img_pe):
-        #     self.move_to(self.moving_layers, self.pe_list[target_pe])
-        #     if self.init_fb_pe == None:
-        #         self.move_fb(app, target_pe)
-        #     else:
-        #         self.move_fb(app, self.init_fb_pe.get_idx())
-        #     self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[self.rank_of_img_pe[0]])
-
-        #     case_only_cpu_mapping = list(self.get_mappings()[0])
-        #     result_tuples_by_cases.append(self.fitness.calculate_fitness(case_only_cpu_mapping[:]))
-        #     result_mapping_by_cases.append(case_only_cpu_mapping[:])
-        #     self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
-
-        #     return result_tuples_by_cases[:], result_mapping_by_cases, pe_idx_per_cases[:]
-        # else:
-
-        # ------- DEGRADING CASE 1 : no change -------
-        self.move_to(self.moving_layers, self.pe_list[target_pe])
-        # self.move_fb_if_img_pe(app, target_pe)
         if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+            self.move_to(self.moving_layers, self.pe_list[target_pe])
             if self.init_fb_pe == None:
                 self.move_fb(app, target_pe)
             else:
                 self.move_fb(app, self.init_fb_pe.get_idx())
+            self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[self.rank_of_img_pe[0]])
 
-        case_one_mapping = list(self.get_mappings()[0])
-        result_tuples_by_cases.append(self.fitness.calculate_fitness(case_one_mapping[:]))
-        # result_tuples_by_cases.append([99999999] * self.num_app)
-        result_mapping_by_cases.append(case_one_mapping[:])
-        self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
+            case_only_cpu_mapping = list(self.get_mappings()[0])
+            result_tuples_by_cases.append(self.fitness.calculate_fitness(case_only_cpu_mapping[:]))
+            result_mapping_by_cases.append(case_only_cpu_mapping[:])
+            self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
 
-
-        # ------- DEGRADING CASE 2 : move to faster PE -------
-        if faster_pe_idx != -1:
+            return result_tuples_by_cases[:], result_mapping_by_cases, pe_idx_per_cases[:]
+        else:
+            # ------- DEGRADING CASE 1 : no change -------
             self.move_to(self.moving_layers, self.pe_list[target_pe])
             # self.move_fb_if_img_pe(app, target_pe)
             if len(self.rank_of_pe) == len(self.rank_of_img_pe):
@@ -702,39 +688,56 @@ class JHeuristic(MapFunc):
                     self.move_fb(app, target_pe)
                 else:
                     self.move_fb(app, self.init_fb_pe.get_idx())
-            self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[faster_pe_idx])
 
-            case_two_mapping = list(self.get_mappings()[0])
-            result_tuples_by_cases.append(self.fitness.calculate_fitness(case_two_mapping[:]))
+            case_one_mapping = list(self.get_mappings()[0])
+            result_tuples_by_cases.append(self.fitness.calculate_fitness(case_one_mapping[:]))
             # result_tuples_by_cases.append([99999999] * self.num_app)
-            result_mapping_by_cases.append(case_two_mapping[:])
+            result_mapping_by_cases.append(case_one_mapping[:])
             self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
-        else:
-            result_tuples_by_cases.append(None)
-            result_mapping_by_cases.append(None)
 
 
-        # ------- DEGRADING CASE 3 : move to slower PE -------
-        if slower_pe_idx != -1:
-            self.move_to(self.moving_layers, self.pe_list[target_pe])
-            # self.move_fb_if_img_pe(app, target_pe)
-            if len(self.rank_of_pe) == len(self.rank_of_img_pe):
-                if self.init_fb_pe == None:
-                    self.move_fb(app, target_pe)
-                else:
-                    self.move_fb(app, self.init_fb_pe.get_idx())
-            self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[slower_pe_idx])
+            # ------- DEGRADING CASE 2 : move to faster PE -------
+            if faster_pe_idx != -1:
+                self.move_to(self.moving_layers, self.pe_list[target_pe])
+                # self.move_fb_if_img_pe(app, target_pe)
+                if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+                    if self.init_fb_pe == None:
+                        self.move_fb(app, target_pe)
+                    else:
+                        self.move_fb(app, self.init_fb_pe.get_idx())
+                self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[faster_pe_idx])
 
-            case_three_mapping = list(self.get_mappings()[0])
-            result_tuples_by_cases.append(self.fitness.calculate_fitness(case_three_mapping[:]))
-            # result_tuples_by_cases.append([99999999] * self.num_app)
-            result_mapping_by_cases.append(case_three_mapping[:])
-            self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
-        else:
-            result_tuples_by_cases.append(None)
-            result_mapping_by_cases.append(None)
+                case_two_mapping = list(self.get_mappings()[0])
+                result_tuples_by_cases.append(self.fitness.calculate_fitness(case_two_mapping[:]))
+                # result_tuples_by_cases.append([99999999] * self.num_app)
+                result_mapping_by_cases.append(case_two_mapping[:])
+                self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
+            else:
+                result_tuples_by_cases.append(None)
+                result_mapping_by_cases.append(None)
 
-        return result_tuples_by_cases[:], result_mapping_by_cases, pe_idx_per_cases[:]
+
+            # ------- DEGRADING CASE 3 : move to slower PE -------
+            if slower_pe_idx != -1:
+                self.move_to(self.moving_layers, self.pe_list[target_pe])
+                # self.move_fb_if_img_pe(app, target_pe)
+                if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+                    if self.init_fb_pe == None:
+                        self.move_fb(app, target_pe)
+                    else:
+                        self.move_fb(app, self.init_fb_pe.get_idx())
+                self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[slower_pe_idx])
+
+                case_three_mapping = list(self.get_mappings()[0])
+                result_tuples_by_cases.append(self.fitness.calculate_fitness(case_three_mapping[:]))
+                # result_tuples_by_cases.append([99999999] * self.num_app)
+                result_mapping_by_cases.append(case_three_mapping[:])
+                self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
+            else:
+                result_tuples_by_cases.append(None)
+                result_mapping_by_cases.append(None)
+
+            return result_tuples_by_cases[:], result_mapping_by_cases, pe_idx_per_cases[:]
 
 
     def search_faster_slower_pe(self, target_pe):
