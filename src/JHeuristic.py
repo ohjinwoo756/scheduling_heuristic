@@ -453,7 +453,6 @@ class JHeuristic(MapFunc):
         whether_go_to_next_app = False
 
         # original mapping information
-        print self.get_mappings()[0]
         initial_mappings = list(self.get_mappings()[0])
         initial_mapped_layers_per_pe = self.deepcopy_list(self.mapped_layers_per_pe_for_syn)
 
@@ -536,13 +535,13 @@ class JHeuristic(MapFunc):
     # 1. get self.moving_layers, self.degrading_layers_per_pe[target_pe], self.degrading_pe[target_pe]
     # 2. update self.perf_improv_per_app[target_pe], self.sum_of_perf_per_pe[target_pe]
     def calc_perf_improv_on_target_pe(self, app, moving_layers, target_pe, prev_result_tuple, initial_mappings, initial_mapped_layers_per_pe):
-        self.moving_layers = moving_layers                                   # XXX IMPORTANT
+        self.moving_layers = moving_layers
         other_app_layers = self.get_other_app_in_target(app, target_pe)
 
         new_mapping_on_target_pe = None # XXX after if-else, it is updated.
 
         if other_app_layers != []:
-            self.degrading_layers_per_pe[target_pe] = other_app_layers              # XXX IMPORTANT
+            self.degrading_layers_per_pe[target_pe] = other_app_layers
             # XXX return results of tuple for 3 cases
             # case order: no change | move to faster PE | move to slower PE
             result_tuples_by_cases, result_mapping, pe_idx_per_cases = self.degrade_other_layers_to(app, target_pe, \
@@ -557,14 +556,16 @@ class JHeuristic(MapFunc):
                 if sum_of_perf_improv > max_perf_improv:
                     max_perf_improv = sum_of_perf_improv
                     new_mapping_on_target_pe = result_mapping[case_idx][:]
+
+                    # XXX IMPORTANT
                     if len(self.rank_of_pe) != len(self.rank_of_img_pe):
-                        self.degrading_pe[target_pe] = pe_idx_per_cases[case_idx]       # XXX IMPORTANT
+                        self.degrading_pe[target_pe] = pe_idx_per_cases[case_idx]
                     else:
-                        self.degrading_pe[target_pe] = self.rank_of_img_pe[0]       # XXX IMPORTANT
+                        self.degrading_pe[target_pe] = self.rank_of_img_pe[0]
 
         else:
-            self.degrading_layers_per_pe[target_pe] = None                             # XXX IMPORTANT
-            self.degrading_pe[target_pe] = -1                                   # XXX IMPORTANT
+            self.degrading_layers_per_pe[target_pe] = None
+            self.degrading_pe[target_pe] = -1
             self.move_to(self.moving_layers, self.pe_list[target_pe])
             # self.move_fb_if_img_pe(app, target_pe)
             if len(self.rank_of_pe) == len(self.rank_of_img_pe):
@@ -579,8 +580,8 @@ class JHeuristic(MapFunc):
         result_tuple = self.fitness.calculate_fitness(new_mapping_on_target_pe[:])
         self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
         sum_of_perf_improv, perf_improv = self.calculate_WCRT_diff_on_each_app(result_tuple, prev_result_tuple, target_pe)
-        self.perf_improv_per_app[target_pe] = perf_improv[:]                    # XXX IMPORTANT
-        self.sum_of_perf_per_pe[target_pe] = sum_of_perf_improv                 # XXX IMPORTANT
+        self.perf_improv_per_app[target_pe] = perf_improv[:]
+        self.sum_of_perf_per_pe[target_pe] = sum_of_perf_improv
 
 
     def calculate_WCRT_diff_on_each_app(self, result_tuple, prev_result_tuple, target_pe):
@@ -679,6 +680,7 @@ class JHeuristic(MapFunc):
             self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
 
             return result_tuples_by_cases[:], result_mapping_by_cases, pe_idx_per_cases[:]
+
         else:
             # ------- DEGRADING CASE 1 : no change -------
             self.move_to(self.moving_layers, self.pe_list[target_pe])
