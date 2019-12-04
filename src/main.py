@@ -339,6 +339,8 @@ def init_processors():
 
 
 def main_thread():
+    start = time.time()
+
     options = parse_options()
     parse_result_path(options)
 
@@ -383,6 +385,8 @@ def main_thread():
     # scheduling
     mappings = mapper.do_schedule()
 
+    print "\n[ELAPSED TIME for getting schedulable mappings] %.2f" % (time.time() - start)
+
     # XXX: draw Gantt chart
     sched_sim = SchedSimulator(app_list, pe_list)
     config.objs_result_by_app = [[] for _ in range(config.num_of_app)] # to assemble results
@@ -413,8 +417,6 @@ def visualize_result():
 
 if __name__ == '__main__':
 
-    start = time.time()
     main_thread()
-    print "\n[ELAPSED TIME] %.2f" % (time.time() - start)
     visualize_result()
 
