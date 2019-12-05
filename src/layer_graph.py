@@ -9,7 +9,7 @@ class DirectedGraph(object):
     """ Directed Graph data structure """
 
     def __init__(self, connections):
-        self._graph = defaultdict(set) # have layer precedence
+        self._graph = defaultdict(set)
         self.add_connections(connections)
 
     def add_connections(self, connections):
@@ -122,18 +122,21 @@ class LayerGraph(DirectedGraph):
         stack.insert(0, node)
         return stack
 
-    def propagate_mobility(self, node, mobility):
+    def propagate_mobility(self, node, delay, pe, mapping):
         idx = 0
         visited_node=set([node])
-        update_nodes = [n for n in self._graph[node] if n not in visited_node and n.mobility > mobility]
+        update_nodes = [n for n in self._graph[node] if n not in visited_node and mapping[n.get_index()] != pe]
+        # update_nodes = [n for n in self._graph[node] if n not in visited_node]
 
         while len(update_nodes) > idx:
             _node = update_nodes[idx]
             if _node not in visited_node:
-                temp = [n for n in self._graph[_node] if n not in visited_node and n.mobility > mobility]
-                _node.set_mobility(mobility)
+                temp = [n for n in self._graph[_node] if n not in visited_node and mapping[n.get_index()] != pe]
+                # temp = [n for n in self._graph[_node] if n not in visited_node]
+                _node.reduce_mobility(delay)
                 update_nodes.extend(temp)
                 visited_node.add(_node)
+                # print("\t\t{t.name:>12s}\t{delay}\t{t.mobility:.2f}\t{pe}/{pe2}".format(t=_node, delay=delay, pe=pe, pe2=mapping[n.get_index()]))
             idx += 1
 
     def _check_all_in_edge_pe(self, node):
@@ -267,18 +270,8 @@ class LayerGraph(DirectedGraph):
             exec_time = node.time_list[pe]
 
         transition_time = 0
-        transition_time_list = []
         for out_edge in self._out_edge[node]:
             transition_time += out_edge.calc_transition_time()
-	    # debug
-            # if node.name == "app_0 c2" or node.name == "app_0 c5" or node.name == "app_0 c8":
-            #     print "out_edge:", out_edge
-            #     print "%s\t\t%d" % (node.name, transition_time)
-            #     print "\t%s\t\t%d" % (out_edge.receiver.name, t + exec_time + transition_time)
-            out_edge.receiver.set_start_time(t + exec_time + transition_time)
             out_edge.produce_data(t + exec_time + transition_time)
 
-            # XXX: Fix for Gantt chart bug (SqueezeNet transition time issue)
-            transition_time_list.append(t + exec_time + transition_time)
-
-        return exec_time, transition_time, transition_time_list
+        return exec_time, transition_time

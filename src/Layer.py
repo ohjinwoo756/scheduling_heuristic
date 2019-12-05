@@ -60,6 +60,7 @@ class Layer(object):
 
         # FIXME
         self.mobility = 0
+        self._mobility = 0
 
         self.kernel_size = kernel_size
         self.num_output = num_output
@@ -99,7 +100,18 @@ class Layer(object):
         self.offset = o
 
     def set_mobility(self, m):
+        # print('[set]', self.name, m)
         self.mobility = m
+
+    def reduce_mobility(self, m):
+        # print('[reduce]', self.name, m)
+        self.mobility -= m
+
+    def store_mobility(self):
+        self._mobility = self.mobility
+
+    def get_delay(self):
+        return self._mobility - self.mobility
 
     def __repr__(self):
         return repr((self.app.name, self.name))
@@ -125,8 +137,8 @@ class Layer(object):
             config.end_nodes_idx.append(self.index + 1)
 
     def do_init(self):
-        if self.offset >= self.get_period():
-            self.set_offset(self.offset - self.iteration * self.get_period())
+        while self.offset >= self.get_period():
+            self.set_offset(self.offset - self.get_period())
         self.iteration = 0
         self.need_out_edge_check = True
         if not self.is_start_node:

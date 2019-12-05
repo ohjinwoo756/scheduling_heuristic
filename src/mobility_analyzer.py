@@ -34,32 +34,47 @@ class MobilityAnalyzer(Analyzer):
         for pe, _ in enumerate(self.pe_list):
             for t in self.pe2layer[pe]:
                 demand = 0.
+                # before_total_time = 0.
+                # for t2 in reversed(self.pe2layer[pe]):
+                #     before_total_time += t2.time_list[pe]
+                #     if t == t2:
+                #         break
+
                 for a in self.app_list:
                     if a is app:
                         break
-                    # demand += self.dbf[a].get_max_demand(pe, app.get_period())
-                    demand += self.dbf[a].get_max_demand(pe, t.mobility + t.time_list[pe])
+                    demand += self.dbf[a].get_max_demand(pe, app.get_period())
+                    # demand += self.dbf[a].get_max_demand(pe, t.mobility + t.time_list[pe])
+                    # demand += self.dbf[a].get_max_demand(pe, self.pe2layer[pe][-1].mobility + before_total_time)
 
+                t.store_mobility()
                 if demand == 0.:
                     continue
 
                 # print("PE {}] Period {:.2f}\tDemand {:.2f}".format(pe, app.get_period(), demand))
-                t.set_mobility(t.mobility - demand)
+                # t.set_mobility(t.mobility - demand)
+                t.reduce_mobility(demand)
                 # print("\t-> {t.name:>12s}\tmobility {t.mobility:.2f}".format(t=t))
 
             # consider the delay from task dependency.
+            # print("=================== [ DEP ] =====================")
             for t in self.pe2layer[pe]:
-                app.update_mobility(t, t.mobility)
+                # print("\t-> {t.name:>12s}\tdelay {delay:.2f}\tmobility {t.mobility:.2f}".format(t=t, delay=t.get_delay()))
+                app.update_mobility(t, t.get_delay(), pe, self.mapping)
+            # print("=================================================")
 
             # consider the delay from tasks which are mapped on the same PE.
+            # print("=================== [ last ] =====================")
             for _pe, _ in enumerate(self.pe_list):
                 if not self.pe2layer[_pe]:
                     continue
-                prev_mobility = self.pe2layer[_pe][0].mobility
-                for t in self.pe2layer[_pe]:
+                prev_mobility = self.pe2layer[_pe][-1].mobility
+                # print(_pe, self.pe2layer[_pe][-1].name, prev_mobility)
+                for t in reversed(self.pe2layer[_pe]):
                     if t.mobility > prev_mobility:
                         t.set_mobility(prev_mobility)
                     prev_mobility = t.mobility
+            # print("==================================================")
 
     def get_response_time(self):
         app = self.app
@@ -110,9 +125,12 @@ class MobilityAnalyzer(Analyzer):
             # self.dbf[a] = DemandFunctionRT(a, mapping, self.pe_list)
 
         self.sched_sim.do_init()
-        self.sched_sim.do_simulation(mapping[idx:])  # response time of target app
+        sched = self.sched_sim.do_simulation(mapping[idx:])  # response time of target app
         response_time = self.sched_sim.get_response_time(app)
         self.max_mobility = first_layer.get_period() - response_time
+        # print("================== sched ===================")
+        # sched.print_sched()
+        # print(response_time, self.max_mobility)
 
         self.pe2max_low_inter = []
         for pe, _ in enumerate(self.pe_list):
@@ -161,4 +179,3 @@ class MobilityAnalyzer(Analyzer):
                         hp_max = l
 
         return violated_layer, [hp_max, lp_max]
-

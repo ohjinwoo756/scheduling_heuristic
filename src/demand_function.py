@@ -59,7 +59,7 @@ class DemandFunctionMobility(DemandFunction):
         self.busy_exec = [0. for _ in pe_list]
         for pe, pe_time in enumerate(self.sched.sched_time):
             self.busy_time.append(deque(pe_time))
-            self.delay_time.append([max_mobility - max(s[0].mobility - self.pe2max_low_inter[pe], 0) for s in self.sched.sched[pe]])
+            self.delay_time.append([max_mobility - max(s.mobility - self.pe2max_low_inter[pe], 0) for s in self.sched.sched[pe].keys()])
             for time in pe_time:
                 self.pe_exec[pe] += time[1] - time[0]
                 if self.busy_exec[pe] < time[1] - time[0]:
@@ -149,4 +149,3 @@ class DemandFunctionMobility(DemandFunction):
         import math
         rest_demand = self._get_rest_demand(t % self.period, busy_time) if t % self.period != 0 else 0
         return math.floor(t / self.period) * pe_exec + rest_demand
-

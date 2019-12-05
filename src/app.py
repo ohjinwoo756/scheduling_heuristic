@@ -5,7 +5,7 @@ import config
 class Application:
     def __init__(self, name, graph, layer_list, period, priority, num_prev_concat):
         self.name = name
-        self.graph = graph # layer_graph
+        self.graph = graph
         self.layer_list = [l for l in layer_list if l.time_list is not None]
         for l in self.layer_list:
             l.set_app(self)
@@ -77,8 +77,8 @@ class Application:
     def get_priority(self):
         return self.priority
 
-    def update_mobility(self, node, mobility):
-        self.graph.propagate_mobility(node, mobility)
+    def update_mobility(self, node, delay, pe, mapping):
+        self.graph.propagate_mobility(node, delay, pe, mapping)
 
     def do_init(self):
         self.graph.do_init(self.layer_list)

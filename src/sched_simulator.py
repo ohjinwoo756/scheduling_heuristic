@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from priority_queue import PriorityQueue
 from sortedcontainers import SortedSet
 from GanttChart import GanttChart
@@ -8,14 +9,15 @@ import config  # Utilization variable shared across modules.
 
 class Schedule(object):
     def __init__(self, num_pe):
-        self.sched = [[] for _ in range(num_pe)]
+        self.sched = [OrderedDict() for _ in range(num_pe)]
         self.sched_time = [[] for _ in range(num_pe)]
         self.busy_time = [[] for _ in range(num_pe)]
 
     def add_sched(self, time_tuple):
         pe, l, t, end_time, transfer_time = time_tuple
-        self.sched[pe].append((l, t, end_time, transfer_time))
+        self.sched[pe][l] = (t, end_time, transfer_time)
         self.sched_time[pe].append((t, end_time))
+        # self.sched_time[pe].append((t, end_time + transfer_time))
         busy_time = self.busy_time[pe]
         if busy_time and busy_time[-1] and busy_time[-1][1] == t:
             busy_time[-1] = (busy_time[-1][0], end_time + transfer_time)
@@ -24,7 +26,7 @@ class Schedule(object):
 
     def print_sched(self):
         for idx, pe_time in enumerate(self.sched):
-            for time in pe_time:
+            for time in pe_time.items():
                 print(idx, time)
 
     def print_busy_sched(self):
@@ -50,7 +52,7 @@ class SchedSimulator(object):
         self.num_layer = len(self.layer_list)
         self.throughput_thresh = 100
 
-        self.draw_iteration = 1
+        self.draw_iteration = 2
 
         self.num_pe = len(pe_list)
 
@@ -90,7 +92,6 @@ class SchedSimulator(object):
                 offset_set.add(l.offset)
         self.timeline.update(list(offset_set))
         self.occupy_times = [0] * self.num_pe
-
 
     def find_runnable_layers(self, t):
         runnable_layers = []
@@ -193,7 +194,7 @@ class SchedSimulator(object):
         app = l.get_app()
         return l, layer_idx, pe, app
 
-    def _update_timeline(self, l, time):
+    def _update_timeline(self, l, time, transition_time):
         timeline = self.timeline
         if l.offset >= 0:
             # print("ID: {} Name: {} Time: {} {} update".format(id(l), l.name, l.offset, l.offset + l.get_period()))
@@ -203,6 +204,7 @@ class SchedSimulator(object):
             l.set_offset(l.get_period() + l.offset)
             # print l.get_period()
         timeline.add(time)
+        timeline.add(time + transition_time)
 
     def do_simulation(self, mapping, iterations=(0, 1), draw_gantt=False, gantt_name="test.png", fitness=None):
         if draw_gantt:
@@ -226,22 +228,17 @@ class SchedSimulator(object):
 
                 l, layer_idx, pe, app = self._pop_and_get_layer_info(q)
 
-                execution_time, transition_time, transition_time_list = app.do_layer(l, pe, t)
+                execution_time, transition_time = app.do_layer(l, pe, t)
                 end_time = t + execution_time
-                occupy_times[pe_idx] = end_time + transition_time
+                occupy_times[pe_idx] = end_time #+ transition_time
 
                 # Update iteration's end time
                 self._set_pe_time(pe, l.iteration, t, occupy_times[pe_idx])
+                # self._set_pe_time(pe, l.iteration, t, end_time)
 
                 self.iteration[layer_idx] = self.iteration[layer_idx] + 1
-
                 # self._update_timeline(l, occupy_times[pe_idx])
-                if transition_time_list == []:
-                    self._update_timeline(l, occupy_times[pe_idx])
-                else:
-                    for time in transition_time_list:
-                        self._update_timeline(l, time)
-
+                self._update_timeline(l, occupy_times[pe_idx], transition_time)
                 l.increase_iter()
 
                 if l.iteration <= 1:
@@ -272,4 +269,3 @@ class SchedSimulator(object):
 
     def get_response_time(self, app):
         return self.response_time[self.app_list.index(app)]
-
