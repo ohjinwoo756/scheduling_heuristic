@@ -669,9 +669,6 @@ class JHeuristic(MapFunc):
         else:
             # ------- DEGRADING CASE 1 : no change -------
             self.move_to(self.moving_layers, self.pe_list[target_pe])
-            if len(self.rank_of_pe) == len(self.rank_of_img_pe):
-                if self.init_fb_pe == None:
-                    self.move_fb(app, target_pe)
 
             case_one_mapping = list(self.get_mappings()[0])
             result_tuples_by_cases.append(self.fitness.calculate_fitness(case_one_mapping[:]))
@@ -683,9 +680,6 @@ class JHeuristic(MapFunc):
             # ------- DEGRADING CASE 2 : move to faster PE -------
             if faster_pe_idx != -1:
                 self.move_to(self.moving_layers, self.pe_list[target_pe])
-                if len(self.rank_of_pe) == len(self.rank_of_img_pe):
-                    if self.init_fb_pe == None:
-                        self.move_fb(app, target_pe)
                 self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[faster_pe_idx])
 
                 case_two_mapping = list(self.get_mappings()[0])
@@ -701,9 +695,6 @@ class JHeuristic(MapFunc):
             # ------- DEGRADING CASE 3 : move to slower PE -------
             if slower_pe_idx != -1:
                 self.move_to(self.moving_layers, self.pe_list[target_pe])
-                if len(self.rank_of_pe) == len(self.rank_of_img_pe):
-                    if self.init_fb_pe == None:
-                        self.move_fb(app, target_pe)
                 self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[slower_pe_idx])
 
                 case_three_mapping = list(self.get_mappings()[0])
