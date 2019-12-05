@@ -80,15 +80,15 @@ for ((n1_idx=0; n1_idx < ${#networks[@]}; n1_idx++)); do # for priority 1
 				if [ ${p_idx} -eq 0 ]; then # if CPU
 					elapsed_of_n1=${!elapsed_all_c[n1_idx]:$c_idx-1:1}
 					elapsed_of_n2=${!elapsed_all_c[n2_idx]:$c_idx-1:1}
-					deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + 20000`
+					deadline=`expr $elapsed_of_n1 + $elapsed_of_n2`
 				elif [ ${p_idx} -eq 1 ]; then # if CPU, GPU
 					elapsed_of_n1=${!elapsed_all_cg[n1_idx]:$c_idx:1}
 					elapsed_of_n2=${!elapsed_all_cg[n2_idx]:$c_idx:1}
-					deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + 20000`
+					deadline=`expr $elapsed_of_n1 + $elapsed_of_n2`
 				else # if CPU, GPU, NPU
 					elapsed_of_n1=${!elapsed_all_cgn[n1_idx]:$c_idx:1}
 					elapsed_of_n2=${!elapsed_all_cgn[n2_idx]:$c_idx:1}
-					deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + 20000`
+					deadline=`expr $elapsed_of_n1 + $elapsed_of_n2`
 				fi
 
 				echo ${networks[n1_idx]} ${networks[n2_idx]} ${pe_config[p_idx]} ${cpu_config[c_idx]}
@@ -128,17 +128,17 @@ for ((n1_idx=0; n1_idx < ${#networks[@]}; n1_idx++)); do # for priority 1
 						elapsed_of_n1=${!elapsed_all_c[n1_idx]:$c_idx-1:1}
 						elapsed_of_n2=${!elapsed_all_c[n2_idx]:$c_idx-1:1}
 						elapsed_of_n3=${!elapsed_all_c[n3_idx]:$c_idx-1:1}
-						deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + $elapsed_of_n3 + 20000`
+						deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + $elapsed_of_n3`
 					elif [ ${p_idx} -eq 1 ]; then # if CPU, GPU
 						elapsed_of_n1=${!elapsed_all_cg[n1_idx]:$c_idx:1}
 						elapsed_of_n2=${!elapsed_all_cg[n2_idx]:$c_idx:1}
 						elapsed_of_n3=${!elapsed_all_cg[n3_idx]:$c_idx:1}
-						deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + $elapsed_of_n3 + 20000`
+						deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + $elapsed_of_n3`
 					else # if CPU, GPU, NPU
 						elapsed_of_n1=${!elapsed_all_cgn[n1_idx]:$c_idx:1}
 						elapsed_of_n2=${!elapsed_all_cgn[n2_idx]:$c_idx:1}
 						elapsed_of_n3=${!elapsed_all_cgn[n3_idx]:$c_idx:1}
-						deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + $elapsed_of_n3 + 20000`
+						deadline=`expr $elapsed_of_n1 + $elapsed_of_n2 + $elapsed_of_n3`
 					fi
 
 					echo ${networks[n1_idx]} ${networks[n2_idx]} ${networks[n3_idx]} 
