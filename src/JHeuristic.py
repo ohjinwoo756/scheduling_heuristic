@@ -36,10 +36,10 @@ class JHeuristic(MapFunc):
                 # row = PE, col = App, content = [-1/1, absolute difference]
         self.sum_of_perf_per_pe = [0] * self.num_pe
         self.moving_layers = None
+        self.moving_fb_layers = None
         self.degrading_layers_per_pe = [None] * self.num_pe
         self.degrading_pe = [-1] * self.num_pe
         self.init_fb_pe = None
-        self.criteria = 0
 
 
     def do_schedule(self):
@@ -401,7 +401,6 @@ class JHeuristic(MapFunc):
 
         # move layers in apps from highest to lowest priority, following graph dependency
         for app in self.app_list: 
-            self.criteria = 0
             self.init_fb_pe = None
             progress = 1 # frontend layer excluded
             while True:
@@ -490,15 +489,18 @@ class JHeuristic(MapFunc):
                 self.move_to(self.degrading_layers_per_pe[max_perf_improv_pe.get_idx()], \
                         self.pe_list[self.degrading_pe[max_perf_improv_pe.get_idx()]])
 
+                if len(self.rank_of_pe) == len(self.rank_of_img_pe):
+                    if self.init_fb_pe == None:
+                        self.init_fb_pe = max_perf_improv_pe
+                        self.move_fb(app, self.init_fb_pe.get_idx())
+
                 new_mapping = list(self.get_mappings()[0])
                 self.get_solution_if_schedulable(new_mapping)
                 # if self.is_schedulable(new_mapping):
                 prev_result_tuple = self.fitness.calculate_fitness(new_mapping[:]) # update previous result
 
                 self.print_chunk_progress_with_messsage("[PASSABLE] move to NEXT PROGRESS", progress, chunk)
-                if self.criteria == 0:
-                    self.init_fb_pe = max_perf_improv_pe
-                self.criteria = 1
+
                 return whether_go_to_next_app, progress, prev_result_tuple
 
 
@@ -567,12 +569,9 @@ class JHeuristic(MapFunc):
             self.degrading_layers_per_pe[target_pe] = None
             self.degrading_pe[target_pe] = -1
             self.move_to(self.moving_layers, self.pe_list[target_pe])
-            # self.move_fb_if_img_pe(app, target_pe)
             if len(self.rank_of_pe) == len(self.rank_of_img_pe):
                 if self.init_fb_pe == None:
                     self.move_fb(app, target_pe)
-                else:
-                    self.move_fb(app, self.init_fb_pe.get_idx())
 
             new_mapping_on_target_pe = list(self.get_mappings()[0])
             self.initialize_move(initial_mappings[:], initial_mapped_layers_per_pe)
@@ -633,23 +632,11 @@ class JHeuristic(MapFunc):
                 self.assign_processor(l, processor)
 
 
-    def move_fb_if_img_pe(self, app, target_pe):
-        if self.pe_list[target_pe] in self.img_pe:
-            moving_layers = [app.layer_list[0], app.layer_list[-1]]
-            self.move_to(moving_layers, self.pe_list[target_pe])
-            for l in moving_layers:
-                if l not in self.moving_layers:
-                    self.moving_layers.append(l)
-        else:
-            pass
-
-
     def move_fb(self, app, target_pe):
         moving_layers = [app.layer_list[0], app.layer_list[-1]]
         self.move_to(moving_layers, self.pe_list[target_pe])
-        for l in moving_layers:
-            if l not in self.moving_layers:
-                self.moving_layers.append(l)
+        self.moving_fb_layers = moving_layers[:]
+        print self.moving_fb_layers
 
 
     def get_other_app_in_target(self, app, target_pe):
@@ -670,8 +657,6 @@ class JHeuristic(MapFunc):
             self.move_to(self.moving_layers, self.pe_list[target_pe])
             if self.init_fb_pe == None:
                 self.move_fb(app, target_pe)
-            else:
-                self.move_fb(app, self.init_fb_pe.get_idx())
             self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[self.rank_of_img_pe[0]])
 
             case_only_cpu_mapping = list(self.get_mappings()[0])
@@ -684,12 +669,9 @@ class JHeuristic(MapFunc):
         else:
             # ------- DEGRADING CASE 1 : no change -------
             self.move_to(self.moving_layers, self.pe_list[target_pe])
-            # self.move_fb_if_img_pe(app, target_pe)
             if len(self.rank_of_pe) == len(self.rank_of_img_pe):
                 if self.init_fb_pe == None:
                     self.move_fb(app, target_pe)
-                else:
-                    self.move_fb(app, self.init_fb_pe.get_idx())
 
             case_one_mapping = list(self.get_mappings()[0])
             result_tuples_by_cases.append(self.fitness.calculate_fitness(case_one_mapping[:]))
@@ -701,12 +683,9 @@ class JHeuristic(MapFunc):
             # ------- DEGRADING CASE 2 : move to faster PE -------
             if faster_pe_idx != -1:
                 self.move_to(self.moving_layers, self.pe_list[target_pe])
-                # self.move_fb_if_img_pe(app, target_pe)
                 if len(self.rank_of_pe) == len(self.rank_of_img_pe):
                     if self.init_fb_pe == None:
                         self.move_fb(app, target_pe)
-                    else:
-                        self.move_fb(app, self.init_fb_pe.get_idx())
                 self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[faster_pe_idx])
 
                 case_two_mapping = list(self.get_mappings()[0])
@@ -722,12 +701,9 @@ class JHeuristic(MapFunc):
             # ------- DEGRADING CASE 3 : move to slower PE -------
             if slower_pe_idx != -1:
                 self.move_to(self.moving_layers, self.pe_list[target_pe])
-                # self.move_fb_if_img_pe(app, target_pe)
                 if len(self.rank_of_pe) == len(self.rank_of_img_pe):
                     if self.init_fb_pe == None:
                         self.move_fb(app, target_pe)
-                    else:
-                        self.move_fb(app, self.init_fb_pe.get_idx())
                 self.move_to(self.degrading_layers_per_pe[target_pe], self.pe_list[slower_pe_idx])
 
                 case_three_mapping = list(self.get_mappings()[0])
