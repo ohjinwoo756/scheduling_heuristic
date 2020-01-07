@@ -1,3 +1,7 @@
+### USER DEFINED ###
+# Set processors used in scheduling
+processor = ['cpu', 'gpu', 'npu']
+# processor = ['cpu', 'gpu']
 
 input_dir_path = "galaxyS9_affin_profile_final"
 # input_dir_path = "hikey970_profile"
@@ -17,4 +21,3 @@ cfg_prototxt_path = []
 est_prototxt_path = []
 start_nodes_idx = []
 end_nodes_idx = []
-

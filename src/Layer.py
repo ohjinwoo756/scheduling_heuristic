@@ -91,10 +91,12 @@ class Layer(object):
             self.offset = 0
             self.need_in_edge_check = True
 
+        # XXX Jinwoo START ------------
         self.start_time = 0
         self.finish_time = None
         self.is_pe_mapped = False
 	self.rank_oct = None
+        # XXX Jinwoo END --------------
 
     def set_offset(self, o):
         self.offset = o
@@ -176,9 +178,6 @@ class Layer(object):
     def set_increase_prio(self):
         self.priority = Layer.unique_prio()
 
-    def set_rank_oct(self, rank_oct):
-        self.rank_oct = rank_oct
-
     def get_priority(self):
         return self.priority
 
@@ -205,6 +204,13 @@ class Layer(object):
     def get_mem_size(self):
         return self.mem_size
 
+    def __str__(self):
+        return '{:>10} ({:>3}) | {:>4} x {:>4} x {:>5} | {}'.format(self.name, str(self.priority), str(self.size[1]), str(self.size[0]), str(self.num_output), str(self.time_list))
+
+    # XXX Jinwoo START -------------------------
+    def set_rank_oct(self, rank_oct):
+        self.rank_oct = rank_oct
+
     def get_rank_oct(self):
         return self.rank_oct
 
@@ -225,6 +231,5 @@ class Layer(object):
 
     def get_is_pe_mapped(self):
         return self.is_pe_mapped
+    # XXX Jinwoo END -------------------------
 
-    def __str__(self):
-        return '{:>10} ({:>3}) | {:>4} x {:>4} x {:>5} | {}'.format(self.name, str(self.priority), str(self.size[1]), str(self.size[0]), str(self.num_output), str(self.time_list))

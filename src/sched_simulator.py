@@ -151,7 +151,6 @@ class SchedSimulator(object):
             if value[0] != 0:
                 available_results = False
                 break
-        config.available_results = available_results
 
         if available_results:
             print("\nPE Mapping per layer: " + str(mapping))
@@ -168,19 +167,12 @@ class SchedSimulator(object):
                 if idx >= config.num_of_app:
                     print("\t\tConstraint function value [by %s] :\t %.2f -> %.2f" % (type(cst).__name__, value[-1], value[0]))
 
-            objs_result = []
             for idx, app in enumerate(self.app_list):
                 print("\n\t[ %s (Period: %d, Priority: %d) ]" % (app.name, app.get_period(), app.get_priority()))
                 print("\t\tObjective function value [by %s]:\t%.2f" % (config.app_to_obj_dict[idx], objs[idx][0]))
                 if config.app_to_cst_dict[idx] != 'None':
                     print("\t\tConstraint function value [by %s]:\t%.2f" % (config.app_to_cst_dict[idx], csts[idx][-1]))
-                config.objs_result_by_app[idx].append(round(objs[idx][0], 2))
-                objs_result.append(round(objs[idx][0], 2))
 
-            # XXX: for short file name
-            config.file_name = "{}{}_{}_{}_{}_{}".format(config.save_path + "/" + "#{}_".format(config.gantt_chart_idx) + config.name, str(config.sched_method), str(config.processor), str(config.period), str(config.cpu_config), str(objs_result))
-            # config.file_name = "{}{}_{}_{}_{}_{}_{}_{}_{}".format(config.save_path + "/" + config.name, str(config.sched_method), str(config.processor), str(config.priority), str(config.period), str(config.cpu_config), str(config.objs), str(objs_result), str(config.csts))
-            gantt.file_name = config.file_name + ".png"
             gantt.draw_gantt_chart()
 
     def _pop_and_get_layer_info(self, q):

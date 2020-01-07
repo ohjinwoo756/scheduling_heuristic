@@ -9,7 +9,7 @@ class Energy_consumption(Objective, Constraint):
     def __init__(self, app_list, app, pe_array):
         super(Energy_consumption, self).__init__(app_list, app, pe_array)
         self.penalty_alpha = 200
-        self.total_cpu_core_num = self.get_total_cpu_core_num() 
+        self.total_cpu_core_num = self.get_total_cpu_core_num()
 
     def get_total_cpu_core_num(self):
         total_cpu_core_num = 0
@@ -30,11 +30,11 @@ class Energy_consumption(Objective, Constraint):
                     one_app_energy += exec_time * pe.get_energy() * hyper_param_by_cpu_core
                 else:
                     one_app_energy += exec_time * pe.get_energy()
-            energy += one_app_energy
+            energy += (one_app_energy / app.get_period())
         return energy
 
     def _objective_function(self, mapping):
-        del mapping # unused 
+        del mapping  # unused
         return self._get_energy(),
 
     def _constraint_function(self):
