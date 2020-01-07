@@ -173,7 +173,7 @@ class SchedSimulator(object):
                 if config.app_to_cst_dict[idx] != 'None':
                     print("\t\tConstraint function value [by %s]:\t%.2f" % (config.app_to_cst_dict[idx], csts[idx][-1]))
 
-            gantt.draw_gantt_chart()
+            # gantt.draw_gantt_chart()
 
     def _pop_and_get_layer_info(self, q):
         _, l = q.pop()  # pop layer from _ready_queues
