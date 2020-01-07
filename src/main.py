@@ -4,6 +4,7 @@
 # @details Input parsing and application starting point.
 
 import sys
+import time
 import google.protobuf.text_format
 import caffe_pb2
 from layer_graph import LayerGraph
@@ -291,6 +292,9 @@ def init_processors():
 
 
 if __name__ == '__main__':
+    # estimate mapping elapsed time
+    start = time.time()
+
     options = parse_options()
 
     mapping_module = __import__(options.sched_method)
@@ -331,10 +335,13 @@ if __name__ == '__main__':
     # scheduling
     mappings = mapper.do_schedule()
 
+    # estimate mapping elapsed time
+    print "\n[ELAPSED TIME to get mappings] %.2f" % (time.time() - start)
+
     # for Gantt chart (not fitness calculation)
     sched_sim = SchedSimulator(app_list, pe_list)
     # draw gantt
-    for m in mappings:
+    for idx, m in enumerate(mappings):
         PE.init_apps_pe_by_mapping(app_list, m, pe_list)
         sched_sim.do_init()
         name = ""
